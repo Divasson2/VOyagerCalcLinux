@@ -27,8 +27,10 @@ StepOutcome runStep(const QString &name, int timeoutMs, std::function<long()> fn
 /// "state D (disk sleep), waiting in <wchan>, in syscall N" for a thread of this process (Linux /proc), or empty.
 QString threadState(int tid);
 
+#ifndef _WIN32
 /// Open a device node (O_RDWR|O_CLOEXEC) with a time limit. Returns the descriptor, -1 (errno in *err) or -2 on timeout.
 int guardedOpen(const QString &path, int timeoutMs, int *err, const std::function<int(const char *)> &openFn = {});
+#endif
 /// Read a small text file (sysfs) with a time limit; false on timeout or when it cannot be read.
 bool guardedReadFile(const QString &path, int timeoutMs, QString *text, bool *timedOut = nullptr);
 /// Which processes have this node open ("pid 123 (name)"), for the diagnostics. Bounded in time.

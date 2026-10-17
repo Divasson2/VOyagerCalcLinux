@@ -2,6 +2,8 @@
 // Copyright (c) 2026 José González Divassón
 // The documentation PDF (QPdfWriter): embedded fonts, pages, header, text, Letter and A4; the text export.
 #include "TestSupport.h"
+#include <QFontDatabase>
+#include <QStandardPaths>
 #include "Inspector.h"
 #include "Machine.h"
 #include "PdfExport.h"
@@ -42,6 +44,7 @@ private slots:
         if (qEnvironmentVariableIsSet("VC_SHOTS")) QFile::remove(qEnvironmentVariable("VC_SHOTS") + QString("/doc-%1.pdf").arg(paper));
         QFile f(path); f.open(QIODevice::WriteOnly); f.write(pdf); f.close();
         if (qEnvironmentVariableIsSet("VC_SHOTS")) QFile::copy(path, qEnvironmentVariable("VC_SHOTS") + QString("/doc-%1.pdf").arg(paper));
+        if (QStandardPaths::findExecutable("pdfinfo").isEmpty()) QSKIP("poppler (pdfinfo, pdffonts, pdftotext) not installed: checked on Linux only");
         const QString info = run("pdfinfo", {path});
         QRegularExpression re("Pages:\\s+(\\d+)");
         int pages = re.match(info).captured(1).toInt();
@@ -57,6 +60,13 @@ private slots:
         QVERIFY(text.contains("HP-15C"));
         QVERIFY(!text.contains("©"));
     }
+    void embeddedFontsLoad() {
+        // the two HP fonts come from the program's resources (never from the system): they must register on every platform
+        const PdfFonts f = PdfFonts::fromResources();
+        QVERIFY2(!f.display.isEmpty() && !f.keys.isEmpty(), qPrintable(f.display + "|" + f.keys));
+        QVERIFY(QFontDatabase::families().contains(f.display) && QFontDatabase::families().contains(f.keys));
+        qInfo() << "app fonts:" << f.display << f.keys;
+    }
     void plainTextExport() {
         auto fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
         Machine m; m.loadFirmware(fw); m.boot(nullptr); m.switchModel(152);
@@ -70,7 +80,12 @@ private slots:
         Machine m; m.loadFirmware(fw); m.boot(nullptr); m.switchModel(152);
         auto c = content(m, "FinancePac.15c");
         QByteArray pdf = renderProgramDocumentPdf(c, Paper::A4, PdfFonts::fromResources());
-        QVERIFY(pdf.size() < 800 * 1024);
+        #ifdef _WIN32
+        const qsizetype limit = 8 * 1024 * 1024;       // Windows (and wine) fall back to big system fonts for a few symbols; the check that matters is the one below
+#else
+        const qsizetype limit = 800 * 1024;
+#endif
+        QVERIFY2(pdf.size() < limit, qPrintable(QString::number(pdf.size())));
         QVERIFY(!pdf.contains(fw.left(64)));
     }
 };

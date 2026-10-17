@@ -4,11 +4,14 @@
 // main.cpp - VoyagerCalc for Linux. Normal start: open the window; it loads the remembered firmware.
 // Developer options for offscreen checks: --firmware FILE, --press KEYS (names, e.g. "1 2 ENTER"), --screenshot OUT.png,
 // --width N, --inspector, --model-menu.
+#include <QtGlobal>
 #include "CalculatorWidget.h"
 #include "InspectorPanel.h"
 #include "MainWindow.h"
+#ifndef Q_OS_WIN
 #include "usb/HidrawTransport.h"
 #include "usb/UsbPermissions.h"
+#endif
 #include "usb/UsbLog.h"
 #include "usb/UsbSelfTest.h"
 #include <QApplication>
@@ -21,6 +24,7 @@
 #include <QTimer>
 
 int main(int argc, char **argv) {
+#ifndef Q_OS_WIN
     // install.sh: allow USB access (one graphical password prompt), no window
     if (argc > 1 && std::strcmp(argv[1], "--fix-usb-permissions") == 0) {
         QCoreApplication core(argc, argv);
@@ -33,6 +37,7 @@ int main(int argc, char **argv) {
         std::printf("%s\n", r.message.toUtf8().constData());
         return 2;
     }
+#endif
     // voyagercalc --usb-selftest: what USB devices there are, whether the calculator answers, and why not (no window, plain text)
     if (argc > 1 && std::strcmp(argv[1], "--usb-selftest") == 0) {
         QCoreApplication core(argc, argv);
@@ -40,7 +45,9 @@ int main(int argc, char **argv) {
         std::printf("\n(The USB log is also in %s)\n", vc::UsbLog::filePath().toUtf8().constData());
         return rc;
     }
+#ifndef Q_OS_WIN
     if (argc > 1 && std::strcmp(argv[1], "--print-udev-rule") == 0) { std::fputs(vc::udevRule().toUtf8().constData(), stdout); return 0; }
+#endif
     if (argc > 1 && std::strcmp(argv[1], "--version") == 0) { std::printf("VoyagerCalc %s\n", VOYAGERCALC_VERSION); return 0; }
     QApplication app(argc, argv);
     Q_INIT_RESOURCE(voyagercalc);

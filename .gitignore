@@ -7,3 +7,6 @@ build-*/
 *.bin
 __pycache__/
 !tests/fixtures/**/*.bin
+dist-windows/
+*.exe
+*.zip

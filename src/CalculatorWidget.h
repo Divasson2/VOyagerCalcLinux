@@ -43,6 +43,7 @@ public:
     QRectF zoneRect(int code, KeyPart part) const;    // a zone of a key, in widget pixels
     QString helpFor(int code, KeyPart part) const;
 
+    double faceAspect() const { return faceModel_ ? faceModel_->aspect() : 0.0; }   // width / height of the face photo (0: no model yet)
     QSize sizeHint() const override { return {760, int(760 / faceModel_->aspect())}; }
     QSize minimumSizeHint() const override { return {360, 220}; }
 

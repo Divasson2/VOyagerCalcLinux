@@ -97,6 +97,12 @@ public:
     QMenu *menu(const QString &title) const;
     Paper paper() const { return paper_; }
 
+    // window size memory (see updateInspectorVisibility)
+    void saveWindowSettings();                        // geometry + whether the flyout was open + its width (also done on close)
+    int inspectorWidth() const { return inspectorWidth_; }
+    bool windowRestoreSettled() const { return !restorePending_; }
+    static QRect screenAreaOverride;                  // tests: pretend the available screen area is this (null: the real screen)
+
     // keys
     void press(int code);
     void release(int code);
@@ -185,6 +191,11 @@ private:
     void linkFailed(const LinkError &e);
     void linkFailedMessage(const QString &m, bool offerFix);
     void updateInspectorVisibility();
+    void restoreWindowGeometry();
+    void fitWindowToScreen();
+    void resizeWindowBy(int dw);
+    void trimSideBars(int sideSpace);
+    QRect availableArea() const;
     int shown(int code) const { return code == 35 ? 25 : code; }
     const Model &model() const;
 
@@ -224,6 +235,9 @@ private:
     QPointer<QDialog> usbLogWindow_;
     Paper paper_ = Paper::A4;
     bool showInspector_ = false, turbo_ = false;
+    bool restorePending_ = true;                      // the restored window has not met its first layout yet
+    bool savedHadInspector_ = false;                  // the saved window size already included the flyout
+    int inspectorWidth_ = 340;                        // the flyout's own width, remembered separately
 
     // usb
     QString linkStatus_;

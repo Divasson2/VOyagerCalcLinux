@@ -11,11 +11,15 @@
 #include <cerrno>
 #include <condition_variable>
 #include <cstring>
+#ifndef _WIN32
 #include <fcntl.h>
+#endif
 #include <memory>
 #include <mutex>
 #include <thread>
+#ifndef _WIN32
 #include <unistd.h>
+#endif
 #ifdef __linux__
 #include <sys/syscall.h>
 #endif
@@ -100,6 +104,7 @@ StepOutcome runStep(const QString &name, int timeoutMs, std::function<long()> fn
     return o;
 }
 
+#ifndef _WIN32
 int guardedOpen(const QString &path, int timeoutMs, int *err, const std::function<int(const char *)> &openFn) {
     const QByteArray p = path.toLocal8Bit();
     auto fn = openFn ? openFn : std::function<int(const char *)>([](const char *s) { return ::open(s, O_RDWR | O_CLOEXEC); });
@@ -109,6 +114,8 @@ int guardedOpen(const QString &path, int timeoutMs, int *err, const std::functio
     if (o.value < 0) { if (err) *err = o.err; return -1; }
     return int(o.value);
 }
+
+#endif
 
 bool guardedReadFile(const QString &path, int timeoutMs, QString *text, bool *timedOut) {
     auto out = std::make_shared<QString>();

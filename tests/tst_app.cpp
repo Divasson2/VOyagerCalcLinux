@@ -9,17 +9,25 @@
 #include <QListView>
 #include <QScrollBar>
 #include "MainWindow.h"
+#include <QStandardPaths>
+#ifdef Q_OS_LINUX
 #include "usb/HidrawTransport.h"
+#endif
+#include "usb/UsbPlatform.h"
 #include "usb/UsbLog.h"
 #include <QMenuBar>
 #include <QSettings>
+#include <QScreen>
+#include <QGuiApplication>
 #include <QTemporaryDir>
 #include <QProcess>
 #include <QThread>
 #include <atomic>
+#ifdef Q_OS_LINUX
 #include <fcntl.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#endif
 
 using namespace vc;
 
@@ -29,6 +37,7 @@ template <typename F> bool waitFor(F cond, int ms = 15000) {
     while (!cond()) { if (t.elapsed() > ms) return false; QTest::qWait(10); }
     return true;
 }
+#ifdef Q_OS_LINUX
 /// The device end of a socket standing in for /dev/hidrawN: reads the 65-byte hidraw writes (report id 0 + 64) and lets the fake calculator answer.
 class HidrawDevice : public QThread {
 public:
@@ -47,6 +56,8 @@ public:
 private:
     int fd_; FakeCalculator *calc_;
 };
+#endif
+
 /// A transport that hands every open() to one shared fake (the app makes a new transport per operation).
 class Forward : public HidTransport {
     FakeCalculator *f_;
@@ -204,6 +215,7 @@ private slots:
         nextSave = out_.path() + "/doc.pdf";
         w->exportPdf();
         QVERIFY(waitFor([&] { return QFileInfo(nextSave).exists(); }));
+        if (QStandardPaths::findExecutable("pdffonts").isEmpty()) { QVERIFY(QFileInfo(nextSave).size() > 1000); QSKIP("poppler (pdffonts) not installed: fonts checked on Linux only"); }
         QProcess p; p.start("pdffonts", {nextSave}); p.waitForFinished();
         const QString fonts = p.readAllStandardOutput();
         QVERIFY2(fonts.contains("HP15C") || fonts.contains("Simulator"), qPrintable(fonts));
@@ -298,6 +310,7 @@ private slots:
         QVERIFY(waitFor([&] { return !errors.isEmpty(); }));
         QVERIFY2(errors.last().contains("Fix USB Permissions"), qPrintable(errors.last()));
     }
+#ifdef Q_OS_LINUX
     void readFromCalculatorReachesTheOpenStepAtOnce() {
         // Field report (test4): the GUI's Read never logged an open line (the selftest, which names the node itself, worked). The GUI path runs the node SEARCH:
         // here with the engine running, a real sysfs file as the first (non-matching) hidraw node, and a kernel-style hidraw fake as the calculator.
@@ -332,6 +345,7 @@ private slots:
         QVERIFY(UsbLog::text().contains("discovery: 3 hidraw node(s)") && UsbLog::text().contains("dump complete"));
         dev.stop = true; dev.wait(); ::close(sv[0]); ::close(sv[1]);
     }
+#endif
     void inspectorSectionHeadersStayPinned() {
         // The "Program (n lines)" bar used to scroll away with the listing. Synthetic snapshot: no firmware needed.
         auto snap = std::make_shared<InspectorSnapshot>();
@@ -382,6 +396,7 @@ private slots:
         const QString dir = qEnvironmentVariable("VC_SHOTS");
         if (!dir.isEmpty()) p.grab().save(dir + "/inspector-pinned-headers.png");
     }
+#ifdef Q_OS_LINUX
     void blockedUsbOpenEndsInAnErrorNotAHangingWindow() {
         // Field report (test4): the USB log showed "(start)" and then only the watchdog 25 s later: something before the first log line of open() never returned.
         QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
@@ -405,6 +420,7 @@ private slots:
                  && log.contains("TIMED OUT") && log.contains("FAILED: Linux did not answer"), qPrintable(log));
         QVERIFY(!log.contains("watchdog"));
     }
+#endif
     void noCalculatorMessageIsPlain() {
         QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
         auto w = window(fw);
@@ -429,7 +445,98 @@ private slots:
         auto w = window(fw);
         for (const char *m : {"File", "View", "Calculator", "Model", "Keys", "Help"}) QVERIFY2(w->menu(m), m);
         QStringList usb; for (QAction *a : w->menu("Calculator")->actions()) if (a->menu()) for (QAction *b : a->menu()->actions()) usb << b->text();
-        QVERIFY2(usb.join('|').contains("Fix USB Permissions"), qPrintable(usb.join('|')));
+        QCOMPARE(usb.join('|').contains("Fix USB Permissions"), usbNeedsPermissionFix());       // Linux only: Windows needs no USB setup
+        QVERIFY2(usb.join('|').contains("Read from Calculator"), qPrintable(usb.join('|')));
+    }
+    // ---- window size memory: the window must not grow at every launch ----
+    static void clearWindowSettings() { QSettings s; for (const char *k : {"geometry", "geometryHasInspector", "inspectorWidth", "showInspector"}) s.remove(QString::fromLatin1(k)); }
+    std::unique_ptr<MainWindow> launchPlain(const QByteArray &fw) {
+        auto w = std::make_unique<MainWindow>();
+        w->prompts.error = [this](const QString &m) { errors << m; };
+        w->prompts.notice = [this](const QString &m) { notices << m; };
+        w->usbFast = true; w->usbSettleMs = 0;
+        w->show();
+        if (!fw.isEmpty()) { w->startFirmware(fw, "t.bin", false); if (!waitFor([&] { return w->isRunning(); })) QTest::qFail("did not boot", __FILE__, __LINE__); QTest::qWait(150); }
+        return w;
+    }
+    static bool screenTooSmall() { QScreen *sc = QGuiApplication::primaryScreen(); return !sc || sc->availableGeometry().width() < 1500 || sc->availableGeometry().height() < 800; }
+    static QByteArray geometryOf(const QRect &r) { QWidget t; t.setGeometry(r); return t.saveGeometry(); }
+    void windowSizeStaysTheSameAtEveryLaunch() {
+        QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
+        if (screenTooSmall()) QSKIP("needs a screen of at least 1500x800 (the offscreen test platform is configured with 1920x1080)");
+        MainWindow::screenAreaOverride = QRect(0, 0, 1920, 1080);
+        clearWindowSettings(); QSettings().setValue("showInspector", true);
+        QList<QSize> sizes; QList<int> insp;
+        for (int i = 0; i < 4; ++i) {
+            auto w = launchPlain(fw);
+            QVERIFY(w->inspector()->isVisible());
+            QVERIFY(w->windowRestoreSettled());
+            sizes << w->size(); insp << w->inspector()->width();
+            w->close();
+        }
+        QVERIFY2(sizes[1] == sizes[2] && sizes[2] == sizes[3], qPrintable(QString("%1 %2 %3 %4").arg(sizes[0].width()).arg(sizes[1].width()).arg(sizes[2].width()).arg(sizes[3].width())));
+        QCOMPARE(insp[1], insp[2]); QCOMPARE(insp[2], insp[3]);
+        QVERIFY(sizes[3].width() < 1500);
+        qInfo("window widths over 4 launches: %d %d %d %d, flyout %d", sizes[0].width(), sizes[1].width(), sizes[2].width(), sizes[3].width(), insp[3]);
+        MainWindow::screenAreaOverride = QRect();
+    }
+    void windowSavedWithFlyoutDoesNotGrowAgain() {      // exactly the reported bug: geometry saved with the flyout inside, flyout shown again at start
+        QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
+        MainWindow::screenAreaOverride = QRect(0, 0, 1920, 1080);
+        clearWindowSettings();
+        { QSettings s; s.setValue("showInspector", true); s.setValue("geometryHasInspector", true); s.setValue("inspectorWidth", 340); s.setValue("geometry", geometryOf(QRect(100, 100, 1100, 650))); }
+        auto w = launchPlain(fw);
+        QVERIFY(w->inspector()->isVisible());
+        QVERIFY2(w->width() <= 1100 && w->width() >= 700, qPrintable(QString::number(w->width())));   // never 1100 + 340
+        QCOMPARE(w->inspector()->width(), 340);
+        const int w1 = w->width();
+        w->close(); w.reset();
+        w = launchPlain(fw);
+        QCOMPARE(w->width(), w1);
+        MainWindow::screenAreaOverride = QRect();
+    }
+    void windowToggleOfFlyoutAddsAndGivesBackItsWidth() {
+        QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
+        if (screenTooSmall()) QSKIP("needs a screen of at least 1500x800 (the offscreen test platform is configured with 1920x1080)");
+        MainWindow::screenAreaOverride = QRect(0, 0, 1920, 1080);
+        clearWindowSettings(); QSettings().setValue("inspectorWidth", 400);
+        auto w = launchPlain(fw);
+        QVERIFY(!w->inspector()->isVisible());
+        const int w0 = w->width();
+        w->setShowInspector(true);
+        QVERIFY(w->inspector()->isVisible());
+        QCOMPARE(w->inspector()->width(), 400);
+        QVERIFY2(w->width() > w0 + 390, qPrintable(QString("%1 -> %2").arg(w0).arg(w->width())));
+        w->setShowInspector(false);
+        QCOMPARE(w->width(), w0);
+        MainWindow::screenAreaOverride = QRect();
+    }
+    void windowRestoredMuchWiderThanTheFaceLosesItsBlackBars() {
+        QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
+        if (screenTooSmall()) QSKIP("needs a screen of at least 1500x800 (the offscreen test platform is configured with 1920x1080)");
+        MainWindow::screenAreaOverride = QRect(0, 0, 1920, 1080);
+        clearWindowSettings();
+        { QSettings s; s.setValue("geometryHasInspector", false); s.setValue("geometry", geometryOf(QRect(50, 50, 1700, 600))); }
+        auto w = launchPlain(fw);
+        const double aspect = w->calculator()->faceAspect();
+        QVERIFY(aspect > 0);
+        const int paneH = w->calculator()->height();
+        QVERIFY2(w->width() < 1700 && w->calculator()->width() <= paneH * aspect * 1.12, qPrintable(QString("window %1, pane %2x%3, aspect %4").arg(w->width()).arg(w->calculator()->width()).arg(paneH).arg(aspect)));
+        QVERIFY(w->width() >= w->minimumWidth());
+        MainWindow::screenAreaOverride = QRect();
+    }
+    void windowLargerThanScreenOrOffScreenIsPulledBack() {      // no firmware needed
+        MainWindow::screenAreaOverride = QRect(0, 0, 1280, 720);
+        clearWindowSettings();
+        { QSettings s; s.setValue("geometry", geometryOf(QRect(-300, 20, 3000, 2000))); s.setValue("geometryHasInspector", true); }
+        { MainWindow w; QVERIFY2(w.width() <= 1280 && w.height() <= 720, qPrintable(QString("%1x%2").arg(w.width()).arg(w.height()))); QVERIFY(w.geometry().left() >= 0); }
+        { QSettings s; s.setValue("geometry", geometryOf(QRect(9000, 9000, 900, 560))); }
+        { MainWindow w; QCOMPARE(w.size(), QSize(900, 560)); QVERIFY(MainWindow::screenAreaOverride.contains(w.geometry().center())); QVERIFY(std::abs(w.geometry().center().x() - 640) <= 6); }
+        clearWindowSettings();
+        { MainWindow w; QCOMPARE(w.size(), QSize(900, 560)); }
+        MainWindow::screenAreaOverride = QRect(0, 0, 800, 480);
+        { MainWindow w; QVERIFY(w.width() <= 800 && w.height() <= 480); }
+        MainWindow::screenAreaOverride = QRect();
     }
     void welcomeWithoutFirmware() {
         MainWindow w; w.prompts.error = [](const QString &) {}; w.show();

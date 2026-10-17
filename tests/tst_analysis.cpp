@@ -180,9 +180,10 @@ private slots:
         QCOMPARE(defaultExtension(12), QString("bin12c")); QCOMPARE(defaultExtension(15), QString("bin15c")); QCOMPARE(defaultExtension(16), QString("bin16c"));
         QCOMPARE(Model::hp15c().fileExtension(), QString("bin15c"));
         QCOMPARE(modelHint("BIN16C"), 16); QCOMPARE(modelHint("12c"), 12); QCOMPARE(modelHint("15cmem"), 15); QCOMPARE(modelHint("txt"), 0);
+        const QString x = QFileInfo("/x").absoluteFilePath();         // "/x" on Linux, "C:/x" on Windows (a path without a drive letter gets one)
         auto side = sidecarCandidates("/x/Pack.bin15c");
         QCOMPARE(side.first(), QString("/x/Pack.bin15c.voyagerdoc"));
-        QVERIFY(side.contains("/x/Pack.15c.voyagerdoc") && side.contains("/x/Pack.15cmem.voyagerdoc") && side.contains("/x/Pack.voyagerdoc"));
+        QVERIFY(side.contains(x + "/Pack.15c.voyagerdoc") && side.contains(x + "/Pack.15cmem.voyagerdoc") && side.contains(x + "/Pack.voyagerdoc"));
         QVERIFY(sidecarCandidates("/x/Pack.dat").size() == 2);
     }
 

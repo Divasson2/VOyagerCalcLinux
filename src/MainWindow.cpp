@@ -6,9 +6,14 @@
 #include "InspectorPanel.h"
 #include "ProgramInfoDialog.h"
 #include "WelcomeWidget.h"
+#include "usb/UsbPlatform.h"
+#ifndef Q_OS_WIN
 #include "usb/HidrawTransport.h"
+#endif
 #include "usb/UsbLog.h"
+#ifndef Q_OS_WIN
 #include "usb/UsbPermissions.h"
+#endif
 #include <QAbstractSpinBox>
 #include <QActionGroup>
 #include <QApplication>
@@ -33,6 +38,11 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSettings>
+#include <QScreen>
+#include <QGuiApplication>
+#include <QWindow>
+#include <algorithm>
+#include <cmath>
 #include <QSplitter>
 #include <QStackedWidget>
 #include <QTextEdit>
@@ -103,6 +113,82 @@ QString PendingWrite::message() const {
     return m + QStringLiteral(" Its current memory was saved to “%1” in %2.").arg(QFileInfo(backup).fileName(), QFileInfo(backup).absolutePath());
 }
 
+// ---- window size memory ----------------------------------------------------------------------------------------------
+// The flyout (Registers & Program) is part of the window. The saved geometry says whether it already included room for
+// the flyout (geometryHasInspector); when the flyout appears as part of that restored layout the window is NOT grown
+// again (it used to grow by the flyout's width at every launch). Only a toggle by the user later changes the width.
+
+QRect MainWindow::screenAreaOverride;
+
+QRect MainWindow::availableArea() const {
+    if (!screenAreaOverride.isNull()) return screenAreaOverride;
+    QScreen *sc = windowHandle() ? windowHandle()->screen() : nullptr;
+    if (!sc) sc = QGuiApplication::screenAt(geometry().center());
+    if (!sc) sc = QGuiApplication::primaryScreen();
+    return sc ? sc->availableGeometry() : QRect(0, 0, 1280, 800);
+}
+
+void MainWindow::restoreWindowGeometry() {
+    QSettings st;
+    const QRect fallbackArea = availableArea();
+    auto useDefault = [&] {
+        const int w = std::min(900, fallbackArea.width()), h = std::min(560, fallbackArea.height() - 30);
+        resize(std::max(minimumWidth(), w), std::max(minimumHeight(), h));
+        move(fallbackArea.center() - QPoint(width() / 2, height() / 2));
+    };
+    bool ok = st.contains(QStringLiteral("geometry")) && restoreGeometry(st.value(QStringLiteral("geometry")).toByteArray());
+    // legacy settings (before the flag existed): the window had the flyout in it when it was open at the end
+    savedHadInspector_ = st.contains(QStringLiteral("geometryHasInspector")) ? st.value(QStringLiteral("geometryHasInspector")).toBool() : showInspector_;
+    if (!ok) { savedHadInspector_ = false; useDefault(); return; }
+    if (isMaximized() || isFullScreen()) return;
+    // off every screen: back to the default, centred
+    bool onScreen = !screenAreaOverride.isNull() ? screenAreaOverride.contains(geometry().center()) : false;
+    if (screenAreaOverride.isNull()) for (QScreen *sc : QGuiApplication::screens()) if (sc->availableGeometry().contains(geometry().center())) onScreen = true;
+    if (!onScreen) { savedHadInspector_ = false; useDefault(); return; }
+    fitWindowToScreen();
+}
+
+/// Keep the window (and its frame) inside the available screen area; smaller than the screen when it is larger.
+void MainWindow::fitWindowToScreen() {
+    if (isMaximized() || isFullScreen()) return;
+    const QRect a = availableArea();
+    const int fw = std::max(0, frameGeometry().width() - width()), fh = std::max(0, frameGeometry().height() - height());
+    int w = std::max(std::min(width(), a.width() - fw), std::min(minimumWidth(), a.width()));
+    int h = std::max(std::min(height(), a.height() - fh), std::min(minimumHeight(), a.height()));
+    if (w != width() || h != height()) resize(w, h);
+    int x = std::clamp(frameGeometry().x(), a.left(), std::max(a.left(), a.right() - (w + fw) + 1));
+    int y = std::clamp(frameGeometry().y(), a.top(), std::max(a.top(), a.bottom() - (h + fh) + 1));
+    if (x != frameGeometry().x() || y != frameGeometry().y()) move(x + (geometry().x() - frameGeometry().x()), y + (geometry().y() - frameGeometry().y()));
+}
+
+/// Change the window width by dw (the flyout appearing or disappearing); never past the screen; keeps the right edge on screen.
+void MainWindow::resizeWindowBy(int dw) {
+    if (isMaximized() || isFullScreen() || dw == 0) return;
+    resize(std::max(minimumWidth(), width() + dw), height());
+    fitWindowToScreen();
+}
+
+/// After a restore: when the calculator pane is clearly wider than its face photo needs (black bars left and right), take the
+/// excess off the window width. Only ever narrows, only once per start, so the window never feels locked.
+void MainWindow::trimSideBars(int sideSpace) {
+    if (isMaximized() || isFullScreen()) return;
+    const double aspect = calc_->faceAspect();
+    if (aspect <= 0) return;
+    const int paneH = height() - (menuBar() && menuBar()->isVisible() ? menuBar()->sizeHint().height() : 0);
+    const int paneW = width() - sideSpace;
+    const int need = int(std::lround(paneH * aspect));
+    if (need > 0 && paneW > need * 1.08) resize(std::max(minimumWidth(), need + sideSpace), height());
+}
+
+void MainWindow::saveWindowSettings() {
+    QSettings s;
+    s.setValue(QStringLiteral("geometry"), saveGeometry());
+    // before the first layout after start the window is exactly as it was loaded: keep what it said
+    s.setValue(QStringLiteral("geometryHasInspector"), restorePending_ ? savedHadInspector_ : inspector_->isVisible());
+    if (inspector_->isVisible() && split_->sizes().size() == 2 && split_->sizes()[1] >= 260) inspectorWidth_ = split_->sizes()[1];
+    s.setValue(QStringLiteral("inspectorWidth"), inspectorWidth_);
+}
+
 // ---- construction ------------------------------------------------------------------------------------------------
 
 static PdfFonts &pdfFonts() { static PdfFonts f = PdfFonts::fromResources(); return f; }
@@ -133,7 +219,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     QSettings st;
     paper_ = st.value(QStringLiteral("pdfPaper"), QStringLiteral("a4")).toString() == QLatin1String("letter") ? Paper::Letter : Paper::A4;
     showInspector_ = st.value(QStringLiteral("showInspector"), false).toBool();
-    if (st.contains(QStringLiteral("geometry"))) restoreGeometry(st.value(QStringLiteral("geometry")).toByteArray());
+    inspectorWidth_ = std::clamp(st.value(QStringLiteral("inspectorWidth"), 340).toInt(), 260, 900);
+    restoreWindowGeometry();
+    connect(split_, &QSplitter::splitterMoved, this, [this] {
+        if (inspector_->isVisible() && split_->sizes().size() == 2 && split_->sizes()[1] >= 260) inspectorWidth_ = split_->sizes()[1];
+    });
 
     // default prompts: Qt's dialogs
     prompts.confirm = [this](const PendingAction &a) {
@@ -199,7 +289,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         UsbLog::write(QStringLiteral("watchdog: the USB work did not finish within the time limit (the window is fine; the USB thread is still waiting)"));
         linkFailed(LinkError::hung(last.section(QStringLiteral("  "), 1)));
     });
-    makeTransport = [] { return std::unique_ptr<HidTransport>(new HidrawTransport()); };
+    makeTransport = [] { return makeDefaultTransport(); };
 
     buildMenus();
     updateMenus();
@@ -262,8 +352,10 @@ void MainWindow::buildMenus() {
     actWrite_ = act(usbMenu_, QStringLiteral("Write to Calculator…"), [this] { writeToCalculator(); });
     actSaveCalc_ = act(usbMenu_, QStringLiteral("Save Calculator Memory to File…"), [this] { saveCalculatorMemoryToFile(); });
     usbMenu_->addSeparator();
-    actFix_ = act(usbMenu_, QStringLiteral("Fix USB Permissions…"), [this] { fixUsbPermissions(); });
-    usbMenu_->addSeparator();
+    if (usbNeedsPermissionFix()) {          // Linux only: the udev rule. Windows needs nothing.
+        actFix_ = act(usbMenu_, QStringLiteral("Fix USB Permissions…"), [this] { fixUsbPermissions(); });
+        usbMenu_->addSeparator();
+    }
     usbMenu_->addAction(QStringLiteral("USB: calculator off, hold f + ENTER, press ON"))->setEnabled(false);
 
     modelMenu_ = menuBar()->addMenu(QStringLiteral("Model"));
@@ -448,13 +540,25 @@ void MainWindow::onInspector(std::shared_ptr<const InspectorSnapshot> s) {
 
 void MainWindow::updateInspectorVisibility() {
     const bool show = running_ && showInspector_ && hasInspector();
-    if (inspector_->isVisible() != show) {
-        const int w = 340;
+    const int handle = split_->handleWidth();
+    if (running_ && restorePending_) {
+        // first layout after the start: the window already is the restored size, which did or did not include the flyout
+        restorePending_ = false;
         inspector_->setVisible(show);
-        if (show) split_->setSizes({std::max(300, split_->width() - w), w});
-        if (isVisible() && !isMaximized() && !isFullScreen()) {
-            QSize sz = size(); sz.setWidth(std::max(minimumWidth(), sz.width() + (show ? w : -w))); resize(sz);
-        }
+        if (show) split_->setSizes({std::max(300, split_->width() - inspectorWidth_ - handle), inspectorWidth_});
+        if (show && !savedHadInspector_) resizeWindowBy(inspectorWidth_ + handle);        // saved without flyout: make room once
+        else if (!show && savedHadInspector_) resizeWindowBy(-(inspectorWidth_ + handle)); // saved with flyout, none now
+        trimSideBars(show ? inspectorWidth_ + handle : 0);
+        fitWindowToScreen();
+        if (show) split_->setSizes({std::max(300, split_->width() - inspectorWidth_ - handle), inspectorWidth_});
+    } else if (inspector_->isVisible() != show) {
+        // the user opened/closed the flyout (or a model change made it appear): the window gets/gives its width
+        int w = inspectorWidth_;
+        if (!show && split_->sizes().size() == 2 && split_->sizes()[1] >= 260) w = inspectorWidth_ = split_->sizes()[1];
+        inspector_->setVisible(show);
+        if (show) split_->setSizes({std::max(300, split_->width() - w - handle), w});
+        resizeWindowBy(show ? w + handle : -(w + handle));
+        if (show) split_->setSizes({std::max(300, split_->width() - w - handle), w});
     }
     actInspector_->setChecked(show);
 }
@@ -483,7 +587,7 @@ void MainWindow::saveStateNow(bool turnBackOn) {
 }
 
 void MainWindow::closeEvent(QCloseEvent *e) {
-    QSettings().setValue(QStringLiteral("geometry"), saveGeometry());
+    saveWindowSettings();
     saveStateNow(false);
     stopEngine();
     QMainWindow::closeEvent(e);
@@ -942,7 +1046,7 @@ void MainWindow::linkFailedMessage(const QString &m, bool offerFix) {
     else showError(m);
 }
 
-void MainWindow::linkFailed(const LinkError &e) { linkFailedMessage(e.message(), e.kind == LinkError::AccessDenied); }
+void MainWindow::linkFailed(const LinkError &e) { linkFailedMessage(e.message(), e.kind == LinkError::AccessDenied && usbNeedsPermissionFix()); }
 
 /// Blocking USB work on its own thread, with a watchdog (the window never waits on it). `work` returns what to
 /// do on the window's thread when it succeeded.
@@ -1038,6 +1142,9 @@ void MainWindow::writeToCalculator() {
 }
 
 void MainWindow::fixUsbPermissions() {
+#ifdef Q_OS_WIN
+    showNotice(QStringLiteral("Windows needs no USB setup for the calculator."));
+#else
     if (linkBusy()) return;
     const QString dev = HidrawTransport::findDevice();
     const int ticket = ++linkTicket_;
@@ -1060,6 +1167,7 @@ void MainWindow::fixUsbPermissions() {
     });
     connect(t, &QThread::finished, t, &QObject::deleteLater);
     t->start();
+#endif
 }
 
 // ---- about --------------------------------------------------------------------------------------------------------------------

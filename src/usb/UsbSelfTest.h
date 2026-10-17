@@ -7,13 +7,23 @@
 #pragma once
 #include <QString>
 #include <functional>
+#include <memory>
 
 namespace vc {
 
+class HidBackend;
+/// The self-test for platforms with a HID API (Windows; tested on Linux with a fake backend). Returns 0 / 1 / 2 like runUsbSelfTest.
+int runHidSelfTest(const std::function<void(const QString &)> &out, std::shared_ptr<HidBackend> backend, int readTimeoutMs = 3000);
+
+#ifdef _WIN32
+/// Windows: lists the HID devices and tries the read (see runHidSelfTest).
+int runUsbSelfTest(const std::function<void(const QString &)> &out);
+#else
 /// Returns 0 when the whole 2048-byte memory was read, 1 when not, 2 when no calculator was found.
 /// The roots are parameters for tests; `readTimeoutMs` is the wait for the replies.
 int runUsbSelfTest(const std::function<void(const QString &)> &out, const QString &sysfs = QStringLiteral("/sys/class/hidraw"),
                    const QString &devRoot = QStringLiteral("/dev"), const QString &usbSysfs = QStringLiteral("/sys/bus/usb/devices"),
                    int readTimeoutMs = 3000);
+#endif
 
 }  // namespace vc

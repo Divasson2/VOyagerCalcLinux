@@ -1,11 +1,11 @@
-# VoyagerCalc for Linux
+# VoyagerCalc for Linux and Windows
 
-A Qt 6 calculator app for Linux that runs **your own** HP 12C / 15C / 16C Collector's Edition firmware on a native
+A Qt 6 calculator app for Linux and Windows (x64 and arm64) that runs **your own** HP 12C / 15C / 16C Collector's Edition firmware on a native
 emulator of the calculator's ARM chip, shows the calculator on screen, and can read and write the calculator's memory
-over USB (`hidraw`).
+over USB (`hidraw` on Linux, the standard Windows HID driver on Windows).
 
 * **No firmware is included** in this repository or in any build. You supply the firmware file of your own calculator
-  (File ▸ Choose Firmware…). It is remembered in `~/.local/share/VoyagerCalc`.
+  (File ▸ Choose Firmware…). It is remembered in `~/.local/share/VoyagerCalc` (Linux) or `%LOCALAPPDATA%\VoyagerCalc` (Windows).
 * Emulator core: plain C11 in [`core/`](core/README.md) (no third-party code).
 * Front end: C++17 + Qt 6 Widgets in [`src/`](src/).
 * Also: registers / program inspector, program documentation export (PDF and text), calculator memory files, USB link
@@ -13,8 +13,8 @@ over USB (`hidraw`).
 * Licence: [MIT](LICENSE). Not affiliated with, endorsed by or sponsored by HP Inc.; "HP" and the calculator model names
   belong to their owners.
 
-> Status: version 0.7.0, a test release. The USB link has been tested against a fake calculator only; reports from real
-> hardware are welcome.
+> Status: version 0.7.0, a test release. On Linux the USB link works with a real calculator in the author's tests. The Windows
+> version is cross-built and tested under wine with a fake HID device; reports from real Windows hardware are welcome.
 
 ## Build
 
@@ -28,8 +28,10 @@ Debian / Ubuntu: `sudo apt install build-essential cmake ninja-build qt6-base-de
 
 ## Install and use
 
-See [docs/INSTALL.md](docs/INSTALL.md): installing from a release tarball, USB access to the calculator, memory files and
-troubleshooting (`voyagercalc --usb-selftest`, Help ▸ Show USB Log).
+* Linux: [docs/INSTALL.md](docs/INSTALL.md): installing from a release tarball, USB access to the calculator, memory files and
+  troubleshooting (`voyagercalc --usb-selftest`, Help ▸ Show USB Log).
+* Windows: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md): per-user installer or zip, USB, troubleshooting ("VoyagerCalc USB Test").
+  Build instructions (native or cross-compiled from Linux, x64 and arm64): [docs/BUILD-WINDOWS.md](docs/BUILD-WINDOWS.md).
 
 ## Tests
 
@@ -42,11 +44,11 @@ firmware files. `tests/fixtures/` holds small 2 KB calculator memory images used
 
 | Path | Content |
 |---|---|
-| `src/` | the application (`usb/` = hidraw transport, calculator link, self test) |
+| `src/` | the application (`usb/` = calculator link, hidraw transport (Linux), Windows HID backend, self test) |
 | `core/` | the emulator core (C11), its tests and table generator |
 | `assets/` | calculator face pictures, fonts (with notice), icon, measured key geometry |
 | `resources/` | Qt resource file |
-| `packaging/` | install / uninstall scripts and the release-tarball builder |
+| `packaging/` | Linux install / uninstall scripts and the release-tarball builder; `packaging/windows/` = installer script, zip / installer builder, cross-compile toolchain files |
 | `tools/` | `gen_face_geometry.py` (regenerates `src/FaceGeometry.h`), `run-tests.sh` |
 | `tests/` | QtTest suites and fixtures |
 
