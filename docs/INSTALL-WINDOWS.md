@@ -10,7 +10,7 @@ Apple Silicon Mac) and **x64** for Intel / AMD PCs (it also runs on Windows on A
 Unsigned builds make Windows SmartScreen show "Windows protected your PC": click **More info**, then **Run anyway**.
 
 ## First start
-Choose your **own** firmware file (File ▸ Choose Firmware…). No firmware is included. It is remembered in
+Choose your **own** firmware file (File ▸ Choose Firmware…). No firmware is included (where to get it: "Where to get calculator firmware" in the [README](../README.md#where-to-get-calculator-firmware), which links The Calculator Store's firmware pages). It is remembered in
 `%LOCALAPPDATA%\VoyagerCalc`, together with saved state, notes and the USB log; uninstalling does not delete that folder.
 
 ## Using the real calculator over USB

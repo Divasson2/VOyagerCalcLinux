@@ -10,7 +10,7 @@ For a 64-bit Debian 13 / Ubuntu 24.04 (or newer) desktop, x86_64 or arm64. (Or b
    `/etc/udev/rules.d/99-voyagercalc.rules`) and needs administrator rights once: a password window opens, or it asks in the
    terminal (your password if you may use sudo, otherwise the root password). If neither works it prints one line to
    paste in a terminal. The program is installed in every case.
-5. **Start VoyagerCalc** from the applications menu. The first time, choose your own firmware file; it is remembered.
+5. **Start VoyagerCalc** from the applications menu. The first time, choose your own firmware file; it is remembered. No firmware is included; where to get it: see "Where to get calculator firmware" in the [README](../README.md#where-to-get-calculator-firmware) (The Calculator Store's firmware pages).
 
 ## Using the real calculator
 Connect it by USB, turn it off, hold **f** and **ENTER**, press **ON**, then use *Calculator ▸ USB* in the app. If the app

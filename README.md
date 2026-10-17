@@ -17,6 +17,17 @@ over USB (`hidraw` on Linux, the standard Windows HID driver on Windows).
 > platforms in the author's tests: Linux, and Windows (tested on Windows 11 ARM with a real HP-15C). The Windows x64 build has been tested
 > under wine only, with a fake HID device. Reports from other systems and calculators are welcome.
 
+## Where to get calculator firmware
+
+This repository and its builds contain **no HP firmware**; you supply the firmware file of your own calculator. The Calculator Store
+(a retailer of HP calculators, run by the author) keeps pages with firmware downloads and links:
+
+* Official HP firmware: <https://www.thecalculatorstore.com/c/resources-and-links/official-hp-calculator-firmware>
+* Test and extended firmware (HP-15C CE C8C8, HP-16C CE B7B7, 10bII+ EDED, HP-12C CE multi E6E6): <https://www.thecalculatorstore.com/c/resources-and-links/hp-calculator-test-firmware>
+* Simulators and emulators: <https://www.thecalculatorstore.com/c/resources-and-links/simulators-and-emulators>
+
+Using firmware is at your own responsibility; the project is not affiliated with HP Inc.
+
 ## Build
 
 Needs CMake ≥ 3.21, a C11 and a C++17 compiler, and Qt 6.4+ (Widgets, Test).
