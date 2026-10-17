@@ -1,0 +1,58 @@
+# VoyagerCalc for Linux
+
+A Qt 6 calculator app for Linux that runs **your own** HP 12C / 15C / 16C Collector's Edition firmware on a native
+emulator of the calculator's ARM chip, shows the calculator on screen, and can read and write the calculator's memory
+over USB (`hidraw`).
+
+* **No firmware is included** in this repository or in any build. You supply the firmware file of your own calculator
+  (File ▸ Choose Firmware…). It is remembered in `~/.local/share/VoyagerCalc`.
+* Emulator core: plain C11 in [`core/`](core/README.md) (no third-party code).
+* Front end: C++17 + Qt 6 Widgets in [`src/`](src/).
+* Also: registers / program inspector, program documentation export (PDF and text), calculator memory files, USB link
+  with backup and verify.
+* Licence: [MIT](LICENSE). Not affiliated with, endorsed by or sponsored by HP Inc.; "HP" and the calculator model names
+  belong to their owners.
+
+> Status: version 0.7.0, a test release. The USB link has been tested against a fake calculator only; reports from real
+> hardware are welcome.
+
+## Build
+
+Needs CMake ≥ 3.21, a C11 and a C++17 compiler, and Qt 6.4+ (Widgets, Test).
+
+    cmake -S . -B build -G Ninja                       # add -DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64 for a Qt outside the distro
+    cmake --build build
+    build/voyagercalc
+
+Debian / Ubuntu: `sudo apt install build-essential cmake ninja-build qt6-base-dev`. More in [docs/BUILD.md](docs/BUILD.md).
+
+## Install and use
+
+See [docs/INSTALL.md](docs/INSTALL.md): installing from a release tarball, USB access to the calculator, memory files and
+troubleshooting (`voyagercalc --usb-selftest`, Help ▸ Show USB Log).
+
+## Tests
+
+    cd build && QT_QPA_PLATFORM=offscreen ctest --output-on-failure
+
+The tests that need a real firmware file are skipped unless you point `VOYAGERCALC_FIRMWARE_DIR` at a folder with your own
+firmware files. `tests/fixtures/` holds small 2 KB calculator memory images used by the tests.
+
+## Layout
+
+| Path | Content |
+|---|---|
+| `src/` | the application (`usb/` = hidraw transport, calculator link, self test) |
+| `core/` | the emulator core (C11), its tests and table generator |
+| `assets/` | calculator face pictures, fonts (with notice), icon, measured key geometry |
+| `resources/` | Qt resource file |
+| `packaging/` | install / uninstall scripts and the release-tarball builder |
+| `tools/` | `gen_face_geometry.py` (regenerates `src/FaceGeometry.h`), `run-tests.sh` |
+| `tests/` | QtTest suites and fixtures |
+
+## Credits
+
+Key-cap font by Eric Rechlin, seven-segment display font by Torsten Manz (see `assets/fonts/README.md`).
+Qt is used under the LGPL v3.
+
+Copyright (c) 2026 Divasson2. MIT licence.

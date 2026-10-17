@@ -1,0 +1,9 @@
+build/
+build-*/
+*.o
+*.a
+*.so
+*.tar.gz
+*.bin
+__pycache__/
+!tests/fixtures/**/*.bin

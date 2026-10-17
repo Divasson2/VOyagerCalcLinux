@@ -1,0 +1,5 @@
+// SPDX-License-Identifier: MIT
+module VoyagerCore {
+    header "voyager_core.h"
+    export *
+}

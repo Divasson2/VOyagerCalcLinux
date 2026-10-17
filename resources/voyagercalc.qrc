@@ -1,0 +1,15 @@
+<!DOCTYPE RCC>
+<RCC version="1.0">
+  <qresource prefix="/faces">
+    <file alias="face_12c_nolcd.png">../assets/faces/face_12c_nolcd.png</file>
+    <file alias="face_15c_nolcd.png">../assets/faces/face_15c_nolcd.png</file>
+    <file alias="face_16c_nolcd.png">../assets/faces/face_16c_nolcd.png</file>
+  </qresource>
+  <qresource prefix="/fonts">
+    <file alias="HP15CSimulatorDisplay.ttf">../assets/fonts/HP15CSimulatorDisplay.ttf</file>
+    <file alias="HP15CSimulatorKeys.ttf">../assets/fonts/HP15CSimulatorKeys.ttf</file>
+  </qresource>
+  <qresource prefix="/icons">
+    <file alias="voyagercalc.png">../assets/icon/AppIcon-256.png</file>
+  </qresource>
+</RCC>
