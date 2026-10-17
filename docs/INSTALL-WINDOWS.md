@@ -14,6 +14,8 @@ Choose your **own** firmware file (File ▸ Choose Firmware…). No firmware is 
 `%LOCALAPPDATA%\VoyagerCalc`, together with saved state, notes and the USB log; uninstalling does not delete that folder.
 
 ## Using the real calculator over USB
+Tested so far: the arm64 build on Windows 11 ARM (Parallels) with a real HP-15C, reading and writing. The x64 build has been tested under wine only.
+
 Nothing to install: Windows' standard HID driver is used.
 1. Connect the calculator. Turn it **off**, hold **f** and **ENTER**, press **ON**: the display stays blank (USB mode).
 2. Calculator ▸ Real Calculator (USB) ▸ Read from Calculator (or Write…).
