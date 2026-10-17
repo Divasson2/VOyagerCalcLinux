@@ -32,7 +32,8 @@ Debian / Ubuntu: `sudo apt install build-essential cmake ninja-build qt6-base-de
 * Linux: [docs/INSTALL.md](docs/INSTALL.md): installing from a release tarball, USB access to the calculator, memory files and
   troubleshooting (`voyagercalc --usb-selftest`, Help ▸ Show USB Log).
 * Windows: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md): per-user installer or zip, USB, troubleshooting ("VoyagerCalc USB Test").
-  Build instructions (native or cross-compiled from Linux, x64 and arm64): [docs/BUILD-WINDOWS.md](docs/BUILD-WINDOWS.md).
+  Build instructions (native or cross-compiled from Linux, x64 and arm64): [docs/BUILD-WINDOWS.md](docs/BUILD-WINDOWS.md);
+  signing the release builds: [docs/SIGNING-WINDOWS.md](docs/SIGNING-WINDOWS.md).
 
 ## Tests
 

@@ -54,6 +54,6 @@ the folder. No firmware is ever included.
 * On Linux, the whole suite (including the Windows transport logic with a fake device) runs with `ctest`.
 
 ## Signing (optional)
-Test builds are unsigned, so Windows SmartScreen says "Windows protected your PC" (More info ▸ Run anyway). For releases, sign
-`voyagercalc.exe`, `voyagercalc-cli.exe`, the DLLs and the installer with `signtool` (for example Azure Trusted Signing:
-`signtool sign /fd SHA256 /tr http://timestamp.acs.microsoft.com /td SHA256 /dlib Azure.CodeSigning.Dlib.dll /dmdf metadata.json file.exe`).
+Test builds are unsigned, so Windows SmartScreen says "Windows protected your PC" (More info ▸ Run anyway). `build-windows.sh` also writes an
+unsigned *staging* zip per architecture; on Windows, `sign-windows.ps1` in it signs the programs, then builds and signs the installer with
+Azure Artifact Signing. See [SIGNING-WINDOWS.md](SIGNING-WINDOWS.md).

@@ -22,6 +22,7 @@ ap.add_argument('--tag', default='')
 ap.add_argument('--version', default='0.7.0')
 ap.add_argument('--makensis', default='')
 ap.add_argument('--nsisdir', default='')
+ap.add_argument('--no-staging', action='store_true', help='do not make the unsigned staging package for sign-windows.ps1')
 a = ap.parse_args()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -84,6 +85,33 @@ with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
 def md5(p): return hashlib.md5(open(p, 'rb').read()).hexdigest()
 open(zpath + '.md5', 'w').write(f'{md5(zpath)}  {os.path.basename(zpath)}\n')
 print(zpath, os.path.getsize(zpath), 'bytes md5', md5(zpath))
+
+# --- staging package for signing on Windows (sign-windows.ps1): the unsigned program folder + everything needed to sign it and to build the installer there
+if not a.no_staging:
+    import json
+    sname = name + '-staging'
+    sroot = os.path.join(a.out, 'stage-staging-' + a.arch, sname)
+    if os.path.exists(sroot):
+        shutil.move(sroot, sroot + '.previous-%d' % os.getpid())
+    os.makedirs(sroot)
+    shutil.copytree(root, os.path.join(sroot, 'VoyagerCalc'))
+    for f in ('sign-windows.ps1', 'sign-windows.cmd', 'installer.nsi', 'voyagercalc.ico'):
+        shutil.copy2(os.path.join(HERE, f), os.path.join(sroot, f))
+    shutil.copy2(os.path.join(HERE, 'README-STAGING.txt'), os.path.join(sroot, 'README.txt'))
+    json.dump({'version': a.version, 'arch': a.arch, 'tag': a.tag}, open(os.path.join(sroot, 'staging.json'), 'w'), indent=2)
+    # optional defaults for the signing metadata, from the environment of the build (never from the repository)
+    sd = {k: os.environ[e] for k, e in (('endpoint', 'VC_SIGN_ENDPOINT'), ('account', 'VC_SIGN_ACCOUNT'), ('profile', 'VC_SIGN_PROFILE'), ('tenant', 'VC_SIGN_TENANT')) if os.environ.get(e)}
+    if sd: json.dump(sd, open(os.path.join(sroot, 'signing-defaults.json'), 'w'), indent=2)
+    for dp, _, fs in os.walk(sroot):
+        for f in fs:
+            if f.lower().endswith('.bin'): sys.exit('STOP: firmware-like file in staging package: ' + os.path.join(dp, f))
+    szip = os.path.join(a.out, sname + '.zip')
+    with zipfile.ZipFile(szip, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        for dp, _, fs in os.walk(sroot):
+            for f in sorted(fs):
+                fp = os.path.join(dp, f); z.write(fp, os.path.join(sname, os.path.relpath(fp, sroot)))
+    open(szip + '.md5', 'w').write(f'{md5(szip)}  {os.path.basename(szip)}\n')
+    print(szip, os.path.getsize(szip), 'bytes md5', md5(szip))
 
 if a.makensis:
     exe = os.path.join(a.out, name + '-setup.exe')
