@@ -138,7 +138,7 @@ private slots:
     void selfTestChord() {
         each([&](Machine &m, const char *n) {
             m.perform(KeyChord::SelfTest); m.run(4000);
-            QVERIFY2(m.displayText().contains("8,8,8,8,8,8,8,8.8.8."), qPrintable(QString(n) + ": " + m.displayText()));
+            QVERIFY2(m.displayText().contains("-8,8,8,8,8,8,8,8,8,8,"), qPrintable(QString(n) + ": " + m.displayText()));
         });
     }
     void usbChordJustTurnsOn() {

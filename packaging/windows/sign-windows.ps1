@@ -199,9 +199,28 @@ Step '5. signed portable zip'
 $zip = Join-Path $OutDir ($baseName + '-signed.zip')
 if ($DryRun) { Say "  [dry run] would create $zip" }
 else {
+    # Entries are written one by one with forward slashes ("VoyagerCalc/platforms/qwindows.dll"). ZipFile.CreateFromDirectory
+    # in Windows PowerShell 5.1 (.NET Framework) writes backslashes, which Linux/macOS unzip and some tools treat as part of
+    # the file name (0.7.0: the zips had to be re-packed by hand).
+    Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     if (Test-Path -LiteralPath $zip) { Remove-Item -LiteralPath $zip -Force }
-    [IO.Compression.ZipFile]::CreateFromDirectory($appDir, $zip, [IO.Compression.CompressionLevel]::Optimal, $true)
+    $root = (Resolve-Path -LiteralPath $appDir).Path.TrimEnd('\', '/')
+    $top = Split-Path -Leaf $root
+    $fs = [IO.File]::Open($zip, [IO.FileMode]::CreateNew)
+    try {
+        $za = New-Object IO.Compression.ZipArchive($fs, [IO.Compression.ZipArchiveMode]::Create)
+        try {
+            foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -File | Sort-Object FullName) {
+                $rel = $f.FullName.Substring($root.Length + 1).Replace('\', '/')
+                [void][IO.Compression.ZipFileExtensions]::CreateEntryFromFile($za, $f.FullName, "$top/$rel", [IO.Compression.CompressionLevel]::Optimal)
+            }
+        } finally { $za.Dispose() }
+    } finally { $fs.Dispose() }
+    # check: no entry may contain a backslash
+    $chk = [IO.Compression.ZipFile]::OpenRead($zip)
+    try { $bad = @($chk.Entries | Where-Object { $_.FullName.Contains('\') }) } finally { $chk.Dispose() }
+    if ($bad.Count -gt 0) { Fail "zip has entries with backslashes: $($bad[0].FullName)" }
     Hashes $zip
 }
 

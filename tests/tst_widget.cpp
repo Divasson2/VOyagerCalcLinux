@@ -5,6 +5,9 @@
 #include "TestSupport.h"
 #include "CalculatorWidget.h"
 #include "HardwareKeyRouter.h"
+#include "LcdPainter.h"
+#include "Model.h"
+#include <QPainter>
 #include <QSignalSpy>
 
 using namespace vc;
@@ -110,6 +113,33 @@ private slots:
         int dark = 0;
         for (int y = g.top() + 5; y < g.bottom() - 5; y += 2) for (int x = g.left() + 5; x < g.right() - 5; x += 2) if (qGray(img.pixel(x, y)) < 60) ++dark;
         QVERIFY(dark > 50);
+    }
+    void allSegmentsLookTheSameOnEveryModel() {
+        // the Voyager glass is one part: the all-segments self test (ON + x) must render identically on the 12C, 15C and 16C
+        auto render = [](int model) {
+            DisplaySnapshot d; d.model = model; d.annBits = ~0ull; d.minus = true;
+            for (auto &x : d.seg) x = 0x7F;
+            for (auto &x : d.dot) x = true;
+            for (auto &x : d.comma) x = true;
+            QImage img(640, 160, QImage::Format_ARGB32); img.fill(Qt::white);
+            QPainter p(&img); paintLcd(p, QRectF(10, 10, 620, 140), d); p.end();
+            return img;
+        };
+        QImage a = render(12), b = render(15), c = render(16);
+        QVERIFY(a == b);
+        QVERIFY(a == c);
+        const auto &l12 = Model::with(12).annunciators(), &l15 = Model::with(15).annunciators(), &l16 = Model::with(16).annunciators();
+        QCOMPARE(l12.size(), size_t(10));
+        QCOMPARE(l12.size(), l15.size()); QCOMPARE(l12.size(), l16.size());
+        for (size_t i = 0; i < l12.size(); ++i) {
+            QCOMPARE(QByteArray(l12[i].label), QByteArray(l15[i].label)); QCOMPARE(l12[i].bit, l16[i].bit); QCOMPARE(l12[i].cell, l16[i].cell);
+        }
+    }
+
+    void keyHelpIsOffByDefault() {
+        CalculatorWidget w;
+        QVERIFY(!w.showKeyHelp());
+        w.setShowKeyHelp(true); QVERIFY(w.showKeyHelp());
     }
 };
 QTEST_MAIN(TstWidget)

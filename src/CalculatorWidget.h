@@ -4,7 +4,7 @@
 // CalculatorWidget.h - the calculator as a product photo (PhotoFaceView.swift): the photo with its LCD glass
 // emptied, the live display painted over the glass, an invisible click area over every key with three zones
 // (gold f legend above the cap, the cap, blue g legend on its front), a pressed key that sinks, latched keys,
-// hover help, the computer keyboard (HardwareKeyRouter) and the TURBO badge.
+// hover help, the computer keyboard (HardwareKeyRouter); optional f/g legend clicks.
 #pragma once
 #include "Emulator.h"
 #include "FaceModel.h"
@@ -30,7 +30,13 @@ public:
     void setDisplay(const DisplaySnapshot &s);
     void setPressed(const QSet<int> &codes) { pressed_ = codes; update(); }
     void setLatched(const QSet<int> &codes) { latched_ = codes; update(); }
-    void setTurbo(bool on) { turbo_ = on; update(); }
+    /// Clicks on the gold / blue legends press f / g + the key (View ▸ Click f/g Labels). Off: the whole key area is the key.
+    void setLegendClicks(bool on) { legendClicks_ = on; update(); }
+    bool legendClicks() const { return legendClicks_; }
+    static QColor lcdLift(int model);                 // screened over the photo's glass (invalid = none: the 12C keeps its original LCD)
+    /// Key help on hover: the tooltip with the key's functions and the keyboard-shortcut bubble (View ▸ Show Key Help, off by default).
+    void setShowKeyHelp(bool on) { showKeyHelp_ = on; update(); }
+    bool showKeyHelp() const { return showKeyHelp_; }
     void setKeysEnabled(bool on) { keysEnabled_ = on; }
     const DisplaySnapshot &display() const { return display_; }
     HardwareKeyRouter &router() { return router_; }
@@ -79,7 +85,7 @@ private:
     QPixmap cache_;
     DisplaySnapshot display_;
     QSet<int> pressed_, latched_;
-    bool turbo_ = false, keysEnabled_ = true;
+    bool keysEnabled_ = true, showKeyHelp_ = false, legendClicks_ = true;
     int mouseKey_ = -1, hoverCode_ = -1;
     KeyPart hoverPart_ = KeyPart::Face;
     HardwareKeyRouter router_;

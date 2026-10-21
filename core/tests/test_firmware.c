@@ -140,6 +140,14 @@ static int load(const uint8_t *d, size_t n, vc_calc **out) { vc_calc *c = vc_cre
 static int has(const char *s, const char *sub) { return strstr(s, sub) != NULL; }
 
 int main(void) {
+    {   /* CPU speed knob: the default keeps the reference's 0.75 (parity); range checked */
+        vc_calc *k = vc_create();
+        CHECK(vc_clock_ipc(k) == VC_IPC_REFERENCE, "default ipc %g", vc_clock_ipc(k));
+        CHECK(vc_set_clock_ipc(k, 0.05) == VC_ERR_ARG && vc_set_clock_ipc(k, 3) == VC_ERR_ARG, "ipc range");
+        CHECK(vc_set_clock_ipc(k, VC_IPC_REAL) == VC_OK && vc_clock_ipc(k) == VC_IPC_REAL, "ipc set");
+        CHECK(vc_set_clock_ipc(k, 0) == VC_OK && vc_clock_ipc(k) == VC_IPC_REFERENCE, "ipc 0 = default");
+        vc_destroy(k);
+    }
     vc_calc *c; int r;
     /* ---- exact image, loose code shape + ROM pointer: recognised as a CE firmware, 12C ROM */
     uint8_t *a = make(0x14F, 2, 1, 0xEF);

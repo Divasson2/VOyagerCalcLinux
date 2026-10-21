@@ -1,6 +1,7 @@
 /* test_pool15.c - the HP-15C memory pool decoder (vc_inspect_pool15, _imag, _matrix) and the
- * dim15 / flag 8 fixes, against a reference decoder on 80 memory dumps (expected values: tests/pool15_expected.txt).
- * Needs the C8C8 15C firmware (not included): FW15=... (tests are skipped when it is not set).
+ * dim15 / flag 8 fixes, against the reference decoder docs/pool15c/pool15.py on the 80 dumps in
+ * docs/pool15c/dumps (expected values: tests/pool15_expected.txt, made by gen_pool15_expected.py).
+ * Needs the C8C8 15C firmware (not included): FW15=... (default /workspace/Firmware/...C8C8.bin).
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 José González Divassón */
 #include "voyager_core.h"
@@ -29,7 +30,7 @@ static int sw(vc_calc *c, int pick) {      /* off, g-ENTER-ON, 4, model key (as 
 static char *field(char **s) { char *f = *s, *e = strchr(f, '|'); if (e) { *e = 0; *s = e + 1; } else *s = f + strlen(f); return f; }
 
 int main(void) {
-    const char *FW = env("FW15", "");
+    const char *FW = env("FW15", "/workspace/Firmware/hp15c-3rom-mute120-fsm5-rel80-opt5cycle-debounce-menu-stopwatch-48fix-keys-batt-trim4-show-C8C8.bin");
     const char *DUMPS = env("DUMPS", "../docs/pool15c/dumps"), *EXP = env("EXP", "tests/pool15_expected.txt");
     size_t n; uint8_t *fw = readfile(FW, &n);
     if (!fw) { printf("SKIP (no %s)\n", FW); return 0; }

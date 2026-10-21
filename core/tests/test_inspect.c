@@ -1,8 +1,8 @@
 /* test_inspect.c - the read-only inspection API: registers, modes, program listing, pointer.
  *
- * usage: test_inspect   (paths from the environment; missing files skip)
+ * usage: test_inspect   (paths from the environment, defaults under /workspace; missing files skip)
  *   B7  HP-16C CE Path-C firmware (B7B7)      ST  stock HP-16C CE firmware
- *   MULTI  HP-12C CE multi E3E3               SAMPLES  a folder of sample .16c files
+ *   MULTI  HP-12C CE multi E3E3               SAMPLES  voyager-sim-public/samples
  *   MRLIST  miller-rabin-A.txt                PHILIST  phi-E-D-2747.txt
  * Checks:
  *   - decoded listings = the published listings (Miller-Rabin 117 steps: keycodes and mnemonics;
@@ -137,17 +137,17 @@ static void mr_registers(vc_calc *c, int regs) {
 
 const char *text(vc_calc *c);
 int main(void) {
-    const char *B7 = env("B7", "");
-    const char *ST = env("ST", "");
-    const char *MULTI = env("MULTI", "");
-    const char *SAMPLES = env("SAMPLES", "");
-    const char *MRLIST = env("MRLIST", "");
-    const char *PHILIST = env("PHILIST", "");
+    const char *B7 = env("B7", "/workspace/Firmware/Voyager16-ext-path-c-trim4-show-B7B7.bin");
+    const char *ST = env("ST", "/workspace/Firmware/_baseline_hp16c-firmware.bin");
+    const char *MULTI = env("MULTI", "/workspace/Firmware/HP12c-multi-152-ext16-E3E3.bin");
+    const char *SAMPLES = env("SAMPLES", "/workspace/voyager-sim-public/samples");
+    const char *MRLIST = env("MRLIST", "/workspace/blog-prime/programs/miller-rabin-A.txt");
+    const char *PHILIST = env("PHILIST", "/workspace/blog-phi/programs/phi-E-D-2747.txt");
     char p[512]; vc_calc *c; vc_inspect_info in; vc_value v;
 
     printf("== calculator images in the firmware (vc_firmware_images)\n");
     {
-        const char *fws[3] = {B7, MULTI, env("F15", "")};
+        const char *fws[3] = {B7, MULTI, env("F15", "/workspace/Firmware/hp15c-3rom-mute120-fsm5-rel80-opt5cycle-debounce-menu-stopwatch-48fix-keys-batt-trim4-show-C8C8.bin")};
         static const int want[3][4] = {{160}, {120, 152, 160}, {150, 152, 160}};
         static const int wantn[3] = {1, 3, 3};
         for (int f = 0; f < 3; f++) {
@@ -264,12 +264,12 @@ int main(void) {
     }
 
     printf("== HP-15C CE (15.0 firmware)\n");
-    if ((c = open_fw(env("F15", ""), VC_ENGINE_WHOLE))) {
+    if ((c = open_fw(env("F15", "/workspace/Firmware/hp15c-3rom-mute120-fsm5-rel80-opt5cycle-debounce-menu-stopwatch-48fix-keys-batt-trim4-show-C8C8.bin"), VC_ENGINE_WHOLE))) {
         extern void test15_boot(vc_calc *c);
         whole = 1; test15_boot(c); whole = 0;
         vc_destroy(c);
     }
-    printf("== HP-12C CE multi (E3E3): 16C, 15C and 12C modes\n");
+    printf("== HP-12C CE multi (%s): 16C, 15C and 12C modes\n", strrchr(MULTI, '/') ? strrchr(MULTI, '/') + 1 : MULTI);
     if ((c = open_fw(MULTI, VC_ENGINE_WHOLE))) {
         extern int multi_tests(vc_calc *c);
         whole = 1; multi_tests(c); whole = 0;

@@ -10,8 +10,9 @@
  *   all models   X = M (0x20), Y = Nut 0 (0x70), Z = Nut 1, T = Nut 2.
  *   HP-16C       LAST X = Nut 3, status = Nut 6, high bytes of 64-bit words = Nut 7,
  *                I = Nut 0xFD (+ high byte in Nut 0xFE), last line = Nut 0xFE, line = Nut 0xFF.
- *                Pool: Path-C 176 registers (logical Nut 0x4D..0xFC; B5/B7B7 at dump 0x168,
- *                the 12C multi's 16C mode at 0x170), stock 29 registers (Nut 0xE0..0xFC, 0x6F0).
+ *                Pool: Path-C 176 registers (logical Nut 0x4D..0xFC; B5/B7B7 and the multi E8E8 at
+ *                dump 0x168, the first extended multi E3E3 at 0x170), stock 29 registers (Nut
+ *                0xE0..0xFC, 0x6F0; standalone stock 16C and the multi E6E6). vc_mem16_layout() tells.
  *                R0 = nibble 0 of the pool, registers packed linearly, ceil(WSIZE/4) nibbles each;
  *                the program grows down from the top register, 7 lines per register.
  *   HP-15C       R0 = Nut 0x10, R1 = 0x11, I = 0x12, LAST X = 0x13, Nut 0x15 = data-register
@@ -52,6 +53,7 @@ typedef struct {
     uint32_t pool;      /* 16C: dump offset of the pool's first register */
     int first, slots;   /* 16C: logical Nut address of the first pool register, pool size */
     int pathc;
+    int mem_layout;     /* 16C: VC_MEM16_* */
 } layout;
 
 static int get_layout(vc_calc *c, layout *L) {
@@ -60,12 +62,11 @@ static int get_layout(vc_calc *c, layout *L) {
     if (!L->d) return VC_ERR_STATE;
     L->model = vc_model(c); L->variant = vc_model_variant(c);
     if (L->model == VC_MODEL_16C) {
-        int pathc;
-        if (vc_firmware_family(c) == VC_MODEL_16C) { pathc = vci_ext16(c); L->pool = 0x168; }
-        else { pathc = vci_rom_word(c, vci_rom_base(c), 0x1D4) == 0x15C; L->pool = 0x170; }   /* Path-C 16C ROM */
-        if (pathc) { L->first = 0x4D; L->slots = 176; }
+        int lay = vc_mem16_layout(c);
+        L->mem_layout = lay;
+        L->pathc = lay == VC_MEM16_EXT || lay == VC_MEM16_EXT_E3E3;
+        if (L->pathc) { L->first = 0x4D; L->slots = 176; L->pool = lay == VC_MEM16_EXT ? 0x168 : 0x170; }
         else { L->pool = 0x6F0; L->first = 0xE0; L->slots = 29; }
-        L->pathc = pathc;
     }
     return L->model ? VC_OK : VC_ERR_STATE;
 }
@@ -245,6 +246,7 @@ int vc_inspect(vc_calc *c, vc_inspect_info *o) {
         if (o->line > o->lines) o->line = o->lines;
         o->registers = regs16(&L, o->word_size);
         o->has_i = 1; o->has_program = 1; o->ext_memory = L.pathc;
+        o->mem_layout = L.mem_layout; o->pool_offset = (int)L.pool;
     } else if (L.model == VC_MODEL_15C) {
         uint64_t f = slot(L.d, off15(0x1A));
         o->flags = (uint32_t)nib(f, 2) | (uint32_t)nib(f, 3) << 4 | (uint32_t)((nib(f, 4) >> 1) & 1) << 9;
@@ -384,14 +386,12 @@ int vc_inspect_program(vc_calc *c, int first, vc_prog_line *out, int max) {
  * imaginary stack (5, flag 8), R2..R(DIM (i)), matrices A..E, free, program (top, growing down). */
 static uint32_t offp(int p) { return 0x70u + 8u * (uint32_t)(p - 0x10); }
 
-int vc_inspect_pool15(vc_calc *c, vc_pool15 *o) {
-    layout L; int r, k;
-    if (!c || !o) return VC_ERR_ARG;
+/* The pool of a 15C image (live dump or a 2 KB memory file); variant 150 or 152. */
+static void pool15_decode(const uint8_t *d, int variant, vc_pool15 *o) {
+    int k;
+    const uint8_t *mp = d + 0x118;
     memset(o, 0, sizeof *o);
-    if ((r = get_layout(c, &L))) return r;
-    if (L.model != VC_MODEL_15C) return VC_ERR_STATE;
-    const uint8_t *d = L.d, *mp = d + 0x118;
-    o->variant = L.variant == 152 ? 152 : 150;
+    o->variant = variant == 152 ? 152 : 150;
     o->base = o->variant == 152 ? 0x40 : 0xA0;
     o->top = 0x100;
     o->data = mp[6];
@@ -404,7 +404,7 @@ int vc_inspect_pool15(vc_calc *c, vc_pool15 *o) {
     o->rows[4] = d[0x144]; o->cols[4] = d[0x143];
     int rn = d[0x142] >> 4;
     o->result = rn >= 0xA && rn <= 0xE ? rn - 0xA : 0;
-    o->complex = complex15(&L);
+    o->complex = (d[0x4C] >> 3) & 1;
     uint64_t p16 = slot(d, 0x70 + 8 * 0x16);
     if (nib(p16, 2)) {
         o->prog_low = (int)(p16 & 0xFF); o->prog_regs = 0x100 - o->prog_low;
@@ -421,6 +421,15 @@ int vc_inspect_pool15(vc_calc *c, vc_pool15 *o) {
     for (k = 0; k < 5; k++) o->matrices += o->rows[k] * o->cols[k];
     o->free = (o->top - o->base) - o->storage - o->matrices - cx - o->prog_regs;
     snprintf(o->gmem, sizeof o->gmem, "%d %d %02d-%d", o->dim_i, o->free, o->prog_regs, o->prog_regs * 7 - o->prog_bytes);
+}
+
+int vc_inspect_pool15(vc_calc *c, vc_pool15 *o) {
+    layout L; int r;
+    if (!c || !o) return VC_ERR_ARG;
+    memset(o, 0, sizeof *o);
+    if ((r = get_layout(c, &L))) return r;
+    if (L.model != VC_MODEL_15C) return VC_ERR_STATE;
+    pool15_decode(L.d, L.variant, o);
     return VC_OK;
 }
 
@@ -448,5 +457,193 @@ int vc_inspect_matrix(vc_calc *c, int m, int row, int col, vc_value *o) {
     if (at < p.base || at > 0xFF) return VC_ERR_STATE;
     bcd_value(slot(vci_dump(c), offp(at)), o);
     snprintf(o->name, sizeof o->name, "%c %d,%d", 'A' + m, row % 100, col % 100);
+    return VC_OK;
+}
+
+/* ------------------------------------------------------------ 16C memory image layouts */
+/* Where the data of a 2 KB image sits tells which layout wrote it (found with the dumps of B7B7,
+ * E3E3, E8E8, E6E6 and the stock 16C, core/tests/test_mem16.c):
+ *   standard   data only in 0x6F0..0x7D7 (29 registers; the pool is the top 232 bytes), nothing below;
+ *   extended   data in 0x168..0x6EF, nothing in 0x6F0..0x7D7. B7B7 / E8E8: R0 starts at 0x168 and the
+ *              program starts at the top register (0x6E0..0x6E7), never 0x6E8..0x6EF. E3E3: 8 bytes later:
+ *              R0 at 0x170 (0x168..0x16F stay empty) and the program top at 0x6E8..0x6EF.
+ * Nothing in the pool areas (a cleared calculator, only the stack / flags): fits every layout.
+ * Data in both pool areas (or in both end slots): not a 16C image of any layout (a 15C memory is like that). */
+static int nz(const uint8_t *m, int a, int b) { int n = 0, i; for (i = a; i < b; i++) n += m[i] != 0; return n; }
+
+int vc_memory_layout(const uint8_t mem[VC_MEMORY_SIZE]) {
+    if (!mem) return VC_MEM16_NONE;
+    int std = nz(mem, 0x6F0, 0x7D8), ext = nz(mem, 0x168, 0x6F0);
+    if (!std && !ext) return VC_MEM16_ANY;
+    if (std && ext) return VC_MEM16_NONE;
+    if (std) return VC_MEM16_STD;
+    int first = nz(mem, 0x168, 0x170), last = nz(mem, 0x6E8, 0x6F0);
+    if (first && last) return VC_MEM16_NONE;
+    if (last) return VC_MEM16_EXT_E3E3;
+    return VC_MEM16_EXT;      /* first slot used, or (R0 = 0 and no program) only the middle: undecidable, taken as the main layout */
+}
+
+static const char *layout_name(int l) {
+    return l == VC_MEM16_STD ? "standard 16C memory (203 bytes, HP-16C CE stock / multi E6E6)" :
+           l == VC_MEM16_EXT ? "extended 16C memory (B5B5 / B7B7 / multi E8E8 layout)" :
+           l == VC_MEM16_EXT_E3E3 ? "extended 16C memory in the early multi E3E3 layout (8 bytes later)" : "an unknown layout";
+}
+
+int vc_memory_precheck(const vc_calc *c, const uint8_t mem[VC_MEMORY_SIZE], vc_memcheck *o) {
+    if (!c || !mem || !o) return VC_ERR_ARG;
+    memset(o, 0, sizeof *o);
+    o->image_layout = vc_memory_layout(mem);
+    o->firmware_layout = vc_mem16_layout(c);
+    int f = o->firmware_layout, i = o->image_layout;
+    if (f == VC_MEM16_NONE || i == VC_MEM16_ANY || i == f) return VC_OK;        /* 12C / 15C: nothing to check here */
+    if (i == VC_MEM16_NONE) {
+        o->verdict = VC_MEMCHK_WARN;
+        snprintf(o->message, sizeof o->message, "This does not look like an HP-16C memory file: data is stored in the areas of both 16C memory layouts (a 15C or damaged file?).");
+    } else if (f == VC_MEM16_EXT && i == VC_MEM16_EXT_E3E3) {
+        o->verdict = VC_MEMCHK_CONVERT;
+        snprintf(o->message, sizeof o->message, "This memory file was saved on the early extended-memory multi firmware (E3E3): its registers sit 8 bytes later than on this firmware. It can be converted (nothing else changes).");
+    } else {
+        o->verdict = VC_MEMCHK_WARN;
+        snprintf(o->message, sizeof o->message, "This memory file is %s, but this firmware's 16C memory is %s. It would load without an error and show wrong or empty registers and program.", layout_name(i), layout_name(f));
+    }
+    return VC_OK;
+}
+
+int vc_memory_convert_e3e3(uint8_t mem[VC_MEMORY_SIZE]) {
+    if (!mem || vc_memory_layout(mem) != VC_MEM16_EXT_E3E3) return 0;
+    memmove(mem + 0x168, mem + 0x170, 0x6F0 - 0x170);       /* 175 registers of the pool, 8 bytes down */
+    memset(mem + 0x6E8, 0, 8);                               /* the last register slot: outside the pool in the new layout */
+    return 1;
+}
+
+/* ------------------------------------------------------------ HP-15C matrices in a memory image (0.7.2)
+ * The Matrix Editor writes a matrix into a 2 KB image the way the firmware's DIM does it
+ * (docs/HP15C-POOL-COMPLEX-MATRICES.md §3.2): the matrix grows or shrinks at its own end, the
+ * matrices above it and the free boundary (map byte 0) move with it, the program never moves, and
+ * a matrix that does not fit between the pool end and the program is refused (the firmware's
+ * Error 10). A fresh 15.2 cold start leaves a free gap below R2; like the firmware's first
+ * reallocation, the write packs the window down onto the pool base first. */
+static void put_slot(uint8_t *d, uint32_t off, uint64_t v) {
+    int i;
+    for (i = 0; i < 7; i++) { d[off + (uint32_t)i] = (uint8_t)(v & 0xFF); v >>= 8; }
+    d[off + 7] = 0;
+}
+static const uint32_t DIM15_OFF[5][2] = { {0x13E, 0x13D}, {0x13C, 0x13B}, {0x13A, 0x139}, {0x146, 0x145}, {0x144, 0x143} };
+
+int vc_image_pool15(const uint8_t mem[VC_MEMORY_SIZE], int variant, vc_pool15 *out) {
+    if (!mem || !out || (variant != 150 && variant != 152)) return VC_ERR_ARG;
+    pool15_decode(mem, variant, out);
+    if (out->data < out->base || out->data > 0x100 || out->pool < out->data || out->pool > 0x100) return VC_ERR_STATE;
+    return VC_OK;
+}
+
+int vc_image_matrix15(const uint8_t mem[VC_MEMORY_SIZE], int variant, int m, int row, int col, vc_value *out) {
+    vc_pool15 p; int r;
+    if (!out || m < 0 || m > 4 || row < 1 || col < 1) return VC_ERR_ARG;
+    if ((r = vc_image_pool15(mem, variant, &p))) return r;
+    memset(out, 0, sizeof *out);
+    if (row > p.rows[m] || col > p.cols[m]) return VC_ERR_ARG;
+    int at = p.start[m] + (row - 1) * p.cols[m] + (col - 1);
+    if (at < p.base || at > 0xFF) return VC_ERR_STATE;
+    bcd_value(slot(mem, offp(at)), out);
+    snprintf(out->name, sizeof out->name, "%c %d,%d", 'A' + m, row % 100, col % 100);
+    return VC_OK;
+}
+
+int vc_matrix15_room(const uint8_t mem[VC_MEMORY_SIZE], int variant, int m, int rows, int cols, int *available) {
+    vc_pool15 p; int r;
+    if (m < 0 || m > 4 || rows < 0 || cols < 0 || rows > 99 || cols > 99) return VC_ERR_ARG;
+    if ((r = vc_image_pool15(mem, variant, &p))) return r;
+    int old = p.rows[m] * p.cols[m];
+    /* contiguous room after packing the cold-start gap: what DIM can take */
+    int room = p.prog_low - p.pool + (p.scratch ? 0 : p.gap) + old;
+    if (available) *available = room;
+    return rows * cols <= room ? VC_OK : VC_ERR_ARG;
+}
+
+int vc_matrix15_write(uint8_t mem[VC_MEMORY_SIZE], int variant, int m, int rows, int cols, const uint64_t *raw) {
+    vc_pool15 p; int r, k, i;
+    if (!mem || m < 0 || m > 4 || rows < 0 || cols < 0 || rows > 99 || cols > 99) return VC_ERR_ARG;
+    if (rows == 0 || cols == 0) rows = cols = 0;
+    if ((r = vc_matrix15_room(mem, variant, m, rows, cols, NULL))) return r;
+    if ((r = vc_image_pool15(mem, variant, &p))) return r;
+    uint8_t *mp = mem + 0x118;
+    if (p.gap > 0 && !p.scratch) {
+        /* pack: imaginary stack, R2.., matrices move down onto the pool base (values move with them) */
+        int lo = p.data - (p.complex ? 5 : 0), g = p.gap;
+        memmove(mem + offp(lo - g), mem + offp(lo), 8u * (uint32_t)(p.pool - lo));
+        memset(mem + offp(p.pool - g), 0, 8u * (uint32_t)g);
+        for (k = 1; k <= 6; k++) mp[k] = (uint8_t)(mp[k] - g);
+        mp[0] = (uint8_t)((p.pool - g) & 0xFF);
+        pool15_decode(mem, variant, &p);
+    }
+    int old = p.rows[m] * p.cols[m], now = rows * cols, delta = now - old;
+    int end = p.start[m] + old;
+    if (p.pool + delta > p.prog_low) return VC_ERR_ARG;
+    if (delta) {
+        memmove(mem + offp(end + delta), mem + offp(end), 8u * (uint32_t)(p.pool - end));
+        if (delta < 0) memset(mem + offp(p.pool + delta), 0, 8u * (uint32_t)(-delta));
+        else memset(mem + offp(end), 0, 8u * (uint32_t)delta);
+        for (k = m + 1; k < 5; k++) mp[5 - k] = (uint8_t)(p.start[k] + delta);
+        int pool = p.pool + delta;
+        mp[0] = (uint8_t)(pool >= 0x100 ? 0 : pool);
+    }
+    mem[DIM15_OFF[m][0]] = (uint8_t)rows; mem[DIM15_OFF[m][1]] = (uint8_t)cols;
+    if (raw) for (i = 0; i < now; i++) put_slot(mem, offp(p.start[m] + i), raw[i] & MASK56);
+    return VC_OK;
+}
+
+/* Text -> the 15C's BCD register value: optional sign, digits with an optional '.', optional
+ * exponent (e or E, optional sign). Rounded to 10 significant digits (half up). Exponents past
+ * +-99 are refused (VC_ERR_ARG), anything smaller than 1e-99 becomes 0 (as the calculator does). */
+int vc_bcd_from_text(const char *s, uint64_t *out) {
+    int neg = 0, dig[64], nd = 0, point = -1, seen = 0, lead = 1, intdigits = 0, e = 0, eneg = 0, i;
+    if (!s || !out) return VC_ERR_ARG;
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s == '+' || *s == '-') neg = *s++ == '-';
+    for (;; s++) {
+        if (*s >= '0' && *s <= '9') {
+            seen = 1;
+            if (lead && *s == '0') { if (point >= 0) intdigits--; continue; }
+            lead = 0;
+            if (nd < 64) dig[nd++] = *s - '0';
+            if (point < 0) intdigits++;
+        } else if (*s == '.' && point < 0) point = 1;
+        else break;
+    }
+    if (!seen) return VC_ERR_ARG;
+    if (*s == 'e' || *s == 'E') {
+        int any = 0; s++;
+        if (*s == '+' || *s == '-') eneg = *s++ == '-';
+        while (*s >= '0' && *s <= '9') { if (e < 10000) e = e * 10 + (*s - '0'); s++; any = 1; }
+        if (!any) return VC_ERR_ARG;
+        if (eneg) e = -e;
+    }
+    while (*s == ' ' || *s == '\t') s++;
+    if (*s) return VC_ERR_ARG;
+    if (nd == 0) { *out = 0; return VC_OK; }
+    int exp = intdigits - 1 + e;               /* scientific exponent of the first significant digit */
+    int m[11] = {0};
+    for (i = 0; i < 10; i++) m[i] = i < nd ? dig[i] : 0;
+    if (nd > 10 && dig[10] >= 5) {
+        for (i = 9; i >= 0; i--) { if (++m[i] < 10) break; m[i] = 0; }
+        if (i < 0) { for (i = 9; i > 0; i--) m[i] = m[i - 1]; m[0] = 1; exp++; }
+    }
+    if (exp > 99) return VC_ERR_ARG;
+    if (exp < -99) { *out = 0; return VC_OK; }
+    uint64_t v = neg ? 9 : 0;
+    for (i = 0; i < 10; i++) v = v << 4 | (uint64_t)m[i];
+    int ee = exp < 0 ? 1000 + exp : exp;
+    v = v << 12 | (uint64_t)(ee / 100) << 8 | (uint64_t)(ee / 10 % 10) << 4 | (uint64_t)(ee % 10);
+    *out = v;
+    return VC_OK;
+}
+
+int vc_bcd_text(uint64_t raw, char *buf, size_t n) {
+    vc_value v;
+    if (!buf || !n) return VC_ERR_ARG;
+    memset(&v, 0, sizeof v);
+    bcd_value(raw & MASK56, &v);
+    snprintf(buf, n, "%s", v.text);
     return VC_OK;
 }

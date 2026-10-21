@@ -106,10 +106,7 @@ bool InspectorSnapshot::operator==(const InspectorSnapshot &o) const {
         && pool == o.pool && imaginary == o.imaginary && matrices == o.matrices;
 }
 
-static void inspectPool15(Emulator &emu, InspectorSnapshot &s) {
-    vc_calc *h = emu.handle();
-    vc_pool15 p{};
-    if (vc_inspect_pool15(h, &p) != VC_OK) return;
+Pool15 pool15FromCore(const vc_pool15 &p) {
     Pool15 o;
     o.variant = p.variant; o.base = p.base; o.top = p.top; o.data = p.data;
     for (int i = 0; i < 5; ++i) { o.starts[i] = p.start[i]; o.rows[i] = p.rows[i]; o.cols[i] = p.cols[i]; }
@@ -117,6 +114,14 @@ static void inspectPool15(Emulator &emu, InspectorSnapshot &s) {
     o.storage = p.storage; o.dimI = p.dim_i; o.matrixRegisters = p.matrices; o.programLow = p.prog_low;
     o.programRegisters = p.prog_regs; o.programBytes = p.prog_bytes; o.free = p.free;
     o.gmem = QString::fromLatin1(p.gmem);
+    return o;
+}
+
+static void inspectPool15(Emulator &emu, InspectorSnapshot &s) {
+    vc_calc *h = emu.handle();
+    vc_pool15 p{};
+    if (vc_inspect_pool15(h, &p) != VC_OK) return;
+    Pool15 o = pool15FromCore(p);
     s.pool = o;
     vc_value v{};
     if (o.complex)

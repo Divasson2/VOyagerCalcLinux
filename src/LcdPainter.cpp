@@ -4,6 +4,8 @@
 #include "Model.h"
 #include <QPainterPath>
 #include <QFont>
+#include <QFontMetricsF>
+#include <algorithm>
 #include <vector>
 
 namespace vc {
@@ -70,13 +72,31 @@ void paintLcd(QPainter &p, const QRectF &glass, const DisplaySnapshot &s) {
     p.setBrush(s.minus ? ink : faint);
     p.drawPath(segment(6, signRect));
 
+    // Annunciators: one fixed layout for every model (the glass is the same part); each label lights only with its segment.
     const double annY = top + digitH + glass.height() * 0.08;
-    QFont f; f.setPixelSize(int(std::max(6.0, glass.height() * 0.15))); f.setWeight(QFont::DemiBold);
+    const auto &anns = Model::with(s.model).annunciators();
+    QFont f; f.setWeight(QFont::DemiBold);
+    double px = std::max(6.0, glass.height() * 0.15);
+    std::vector<double> xs(anns.size());
+    for (int round = 0; round < 12; ++round) {          // shrink the font until no label runs into the next one
+        f.setPixelSize(std::max(4, int(px)));
+        QFontMetricsF fm(f);
+        bool fits = true;
+        for (size_t i = 0; i < anns.size(); ++i) {
+            xs[i] = left + (anns[i].cell + 1) * cellW;
+            if (i && QLatin1String(anns[i].label) == QLatin1String("RAD") && QLatin1String(anns[i - 1].label) == QLatin1String("G"))
+                xs[i] = xs[i - 1] + fm.horizontalAdvance(QStringLiteral("G"));
+            else if (i && xs[i] < xs[i - 1] + fm.horizontalAdvance(QString::fromLatin1(anns[i - 1].label)) + cellW * 0.08) fits = false;
+        }
+        if (fits || px <= 4) break;
+        px *= 0.92;
+    }
     p.setFont(f);
-    for (const Annunciator &a : Model::with(s.model).annunciators()) {
-        bool on = s.annBits >> a.bit & 1;
+    for (size_t i = 0; i < anns.size(); ++i) {
+        const Annunciator &a = anns[i];
+        const bool on = a.bit >= 0 && a.bit < 64 && (s.annBits >> a.bit & 1);
         p.setPen(on ? ink : faint);
-        p.drawText(QPointF(left + (a.cell + 1) * cellW, annY + f.pixelSize()), QString::fromLatin1(a.label));
+        p.drawText(QPointF(xs[i], annY + f.pixelSize()), QString::fromLatin1(a.label));
     }
     p.restore();
 }

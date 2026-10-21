@@ -19,7 +19,7 @@
 extern "C" {
 #endif
 
-#define VC_API_VERSION 3
+#define VC_API_VERSION 6
 #define VC_MEMORY_SIZE 2048          /* a VoyagerSave .16c / .15c file */
 #define VC_LCD_BYTES   32            /* LCD controller segment registers DRL0..DRH3 */
 
@@ -122,6 +122,14 @@ int        vc_engine(const vc_calc *c);
 
 /* WHOLE engine: simulated battery voltage (default 3.0 V); takes effect at vc_start. */
 int        vc_set_battery(vc_calc *c, double volts);
+/* Speed of the emulated CPU: ARM instructions executed per CPU clock, so one 10 ms tick runs MHz x 10,000 x ipc
+ * instructions (the firmware's clock setting 4 / 12 / 48 MHz still applies). Timers are unaffected (they count
+ * ticks). Default VC_IPC_REFERENCE (0.75, the Python reference's estimate: keeps instruction-for-instruction parity
+ * with it). The apps set VC_IPC_REAL, calibrated so a 4 MHz program runs as fast as a real 15C CE. 0 = default. */
+#define VC_IPC_REFERENCE 0.75
+#define VC_IPC_REAL      0.577        /* 0.75 / 1.3: VoyagerCalc ran ~30 % fast at 4 MHz (stopwatch on a real 15C CE) */
+int        vc_set_clock_ipc(vc_calc *c, double ipc);
+double     vc_clock_ipc(const vc_calc *c);
 
 /* --- memory (VoyagerSave image) -------------------------------------------- */
 int        vc_load_memory(vc_calc *c, const uint8_t mem[VC_MEMORY_SIZE]);
@@ -219,7 +227,9 @@ typedef struct vc_inspect_info {
     int      has_i;         /* the model has an index register I */
     int      has_program;   /* vc_inspect_program() works for this model */
     int      ext_memory;    /* 16C Path-C extended memory */
-    int      reserved[6];
+    int      mem_layout;    /* 16C: VC_MEM16_* layout of the memory image (0 = not a 16C) */
+    int      pool_offset;   /* 16C: dump offset of the first pool register (0x6F0, 0x168, 0x170) */
+    int      reserved[4];
 } vc_inspect_info;
 int vc_inspect(vc_calc *c, vc_inspect_info *out);
 int vc_inspect_stack(vc_calc *c, int reg, vc_value *out);      /* VC_REG_* */
@@ -251,6 +261,23 @@ int vc_inspect_pool15(vc_calc *c, vc_pool15 *out);
 int vc_inspect_imag(vc_calc *c, int reg, vc_value *out);   /* VC_REG_X..VC_REG_LASTX, complex mode only */
 int vc_inspect_matrix(vc_calc *c, int m, int row, int col, vc_value *out);   /* 1-based row, col */
 
+/* --- HP-15C matrices in a 2 KB memory image (0.7.2, the Matrix Editor) --------------------------
+ * The same pool as vc_inspect_pool15, read from an image (variant 150 or 152: the running 15C mode). */
+int vc_image_pool15(const uint8_t mem[VC_MEMORY_SIZE], int variant, vc_pool15 *out);
+int vc_image_matrix15(const uint8_t mem[VC_MEMORY_SIZE], int variant, int m, int row, int col, vc_value *out);
+/* Can matrix m (0..4 = A..E) be dimensioned rows x cols (0..99 each)? VC_OK or VC_ERR_ARG (does not
+ * fit: the firmware would give Error 10). *available = the largest rows*cols that fits (its own
+ * registers count as free). */
+int vc_matrix15_room(const uint8_t mem[VC_MEMORY_SIZE], int variant, int m, int rows, int cols, int *available);
+/* DIM matrix m to rows x cols in the image, as the firmware does (matrices above and the free
+ * boundary move, the program does not), then store raw[0 .. rows*cols-1] row-major (BCD register
+ * values; NULL keeps the old elements in their linear order, new ones are 0). 0 x 0 frees it. */
+int vc_matrix15_write(uint8_t mem[VC_MEMORY_SIZE], int variant, int m, int rows, int cols, const uint64_t *raw);
+/* Text ("1.5", "-2E-3", "1e5"; '.' as the decimal point) -> a 15C register value (10 digits, rounded). */
+int vc_bcd_from_text(const char *text, uint64_t *raw);
+/* A 15C register value as the inspector shows it ("1.5", "-2e-3"): vc_bcd_from_text reads it back exactly. */
+int vc_bcd_text(uint64_t raw, char *buf, size_t n);
+
 typedef struct vc_prog_line {
     int      line;          /* 1 .. lines */
     uint8_t  code[2];       /* the stored byte(s) */
@@ -261,6 +288,42 @@ typedef struct vc_prog_line {
 } vc_prog_line;
 /* Up to max lines starting at line first (1-based). Returns the number filled, or an error. */
 int vc_inspect_program(vc_calc *c, int first, vc_prog_line *out, int max);
+
+
+/* --- 16C memory layouts (what a .16c / .bin16c image contains) ------------------------------
+ * The 2 KB image has three 16C layouts. Same size, same extension, but the registers and the
+ * program sit at different offsets, so an image from one layout read as another shows wrong or
+ * empty registers (no error, the firmware accepts it):
+ *   VC_MEM16_STD        stock 16C memory: 29 registers (203 bytes) at 0x6F0. HP-16C CE firmware
+ *                       without extended memory and the multi E6E6 (12C / 15.2 / 16C).
+ *   VC_MEM16_EXT        Path-C extended memory: 176 registers (1232 bytes) at 0x168. The 16C CE
+ *                       builds B5B5 / B7B7 and the multi E8E8 (identical layout: images move both ways).
+ *   VC_MEM16_EXT_E3E3   the first multi with extended memory (E3E3): the same pool at 0x170
+ *                       (8 bytes later). vc_memory_convert_e3e3() makes it VC_MEM16_EXT.
+ *   VC_MEM16_ANY        (images only) nothing stored in the pool areas: fits every layout. */
+enum { VC_MEM16_NONE = 0, VC_MEM16_STD = 1, VC_MEM16_EXT = 2, VC_MEM16_EXT_E3E3 = 3, VC_MEM16_ANY = 4 };
+/* Layout of the active 16C memory of the loaded firmware (VC_MEM16_NONE when 12C / 15C is active). */
+int vc_mem16_layout(const vc_calc *c);
+/* Same for the firmware file, whatever model is active (NONE: no 16C in it, e.g. the 12C-only images). */
+int vc_firmware_mem16(const vc_calc *c);
+/* Layout a 2 KB image appears to have (structural guess from where data sits; VC_MEM16_NONE when
+ * it cannot be a 16C image or its pool areas contradict each other). */
+int vc_memory_layout(const uint8_t mem[VC_MEMORY_SIZE]);
+enum { VC_MEMCHK_OK = 0,        /* nothing wrong found (or not a 16C: nothing to check) */
+       VC_MEMCHK_WARN = 1,      /* the image is another 16C layout: it would read wrongly here */
+       VC_MEMCHK_CONVERT = 2 }; /* old E3E3 image into the extended layout: vc_memory_convert_e3e3 fixes it */
+typedef struct vc_memcheck {
+    int  verdict;               /* VC_MEMCHK_* */
+    int  image_layout;          /* VC_MEM16_* of the image */
+    int  firmware_layout;       /* VC_MEM16_* of the active 16C memory (NONE: not in 16C mode) */
+    char message[320];          /* explanation to show the user (empty when OK) */
+} vc_memcheck;
+/* Structural pre-check of a memory image against the running firmware, to run before the
+ * trial load (a trial load cannot see this: the firmware does not reject it). Read-only. */
+int vc_memory_precheck(const vc_calc *c, const uint8_t mem[VC_MEMORY_SIZE], vc_memcheck *out);
+/* Old E3E3 image -> VC_MEM16_EXT layout (pool 8 bytes earlier), in place. Returns 1 when it
+ * converted, 0 when the image is not an E3E3-layout image (left unchanged). */
+int vc_memory_convert_e3e3(uint8_t mem[VC_MEMORY_SIZE]);
 
 /* --- misc -------------------------------------------------------------------- */
 void       vc_get_stats(const vc_calc *c, vc_stats *out);

@@ -12,6 +12,8 @@ uint32_t       vci_rom_base(const vc_calc *c);
 int            vci_rom_word(const vc_calc *c, uint32_t rb, uint32_t i);
 /* 1 = 16C CE firmware with the Path-C extended memory (B5B5 / B7B7 builds). */
 int            vci_ext16(const vc_calc *c);
+/* Halfword of the firmware image at flash address addr (little endian), -1 outside it. */
+int            vci_flash_u16(const vc_calc *c, uint32_t addr);
 /* Whole engine: 10 ms ticks in a row without a WFI sleep; any key held (1) or not (0). */
 uint32_t       vci_busy_ticks(const vc_calc *c);
 int            vci_key_held(const vc_calc *c);

@@ -73,17 +73,11 @@ void EngineWorker::tick() {
     if (!running_) return;
     qint64 ns = clock_.nsecsElapsed();
     clock_.restart();
-    if (turbo_) {
-        // as fast as possible, but look at keys and the display every ~15 ms
-        QElapsedTimer t; t.start();
-        do { step(10); } while (running_ && t.nsecsElapsed() < 15'000'000);
-        simNs_ = 0; clock_.restart();
-    } else {
-        simNs_ += ns;
-        int steps = 0;
-        while (running_ && simNs_ >= 10'000'000 && steps < 10) { step(10); simNs_ -= 10'000'000; ++steps; }
-        if (simNs_ > 100'000'000) simNs_ = 0;      // fell behind (a stall): no catch-up race
-    }
+    // always real time (0.7.1: Turbo removed): 10 ms of calculator time per 10 ms of wall time
+    simNs_ += ns;
+    int steps = 0;
+    while (running_ && simNs_ >= 10'000'000 && steps < 10) { step(10); simNs_ -= 10'000'000; ++steps; }
+    if (simNs_ > 100'000'000) simNs_ = 0;          // fell behind (a stall): no catch-up race
     if (running_) publish();
 }
 

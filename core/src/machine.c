@@ -184,6 +184,7 @@ struct vc_calc {
     uint32_t clk_addr;       /* SRAM address of the firmware's CPU-clock variable (Hz), build specific */
     uint32_t adc_value, adc_vec, tick_vec;
     double battery;
+    double ipc;                  /* ARM instructions per CPU clock used for the 10 ms slice (default 0.75) */
     uint32_t consec_a; int consec_n, consec_flip, consec_valid;
     char frames[MAX_FRAMES][21]; uint32_t nframes;
 };
@@ -304,6 +305,7 @@ vc_calc *vc_create(void) {
     if (!c) return NULL;
     c->engine = -1;
     c->battery = 3.0;
+    c->ipc = VC_IPC_REFERENCE;
     c->flash = calloc(FLASH_SIZE, 1);
     c->sram = calloc(0x10000, 1);
     c->snap_sram = calloc(0x10000, 1);
@@ -459,7 +461,11 @@ int vc_load_firmware(vc_calc *c, const uint8_t *data, size_t len) {
     } else {
         const char *base = c->family == VC_MODEL_16C ? "HP-16C CE firmware" : c->family == VC_MODEL_15C ? (loose && rm == 1 ? "HP-12C CE firmware" : loose && rm == 4 ? "HP-16C CE firmware" : "HP-15C CE firmware") :
                            c->family == VC_FAMILY_MULTI ? "HP-12C CE multi firmware (12C / 15C / 16C)" : "unknown firmware";
-        snprintf(c->info, sizeof c->info, "%s%s%s", base, c->ext16 ? " (extended memory)" : "", loose && c->family != VC_MODEL_NONE ? " (recognised by its structure, not a tested build)" : "");
+        int m16 = c->family == VC_FAMILY_MULTI ? vc_firmware_mem16(c) : VC_MEM16_NONE;
+        const char *e16 = c->ext16 ? " (extended memory)" :
+                          m16 == VC_MEM16_EXT ? " (16C: extended memory)" : m16 == VC_MEM16_EXT_E3E3 ? " (16C: extended memory, early E3E3 layout)" :
+                          m16 == VC_MEM16_STD ? " (16C: standard memory)" : "";
+        snprintf(c->info, sizeof c->info, "%s%s%s", base, e16, loose && c->family != VC_MODEL_NONE ? " (recognised by its structure, not a tested build)" : "");
     }
     c->engine = -1;
     if (c->family == VC_FAMILY_STOCK && !stock_runnable(c)) {
@@ -620,7 +626,7 @@ int vc_start(vc_calc *c, int engine, int cold) {
         if (c->paint) cpu_add_hook(cpu, c->paint, hook_paint, c);
         c->limit = (uint64_t)-1 / 2;
         if (c->family == VC_MODEL_16C) cpu_add_hook(cpu, A16_FETCH, hook_fetch, c);   /* only counts Nut instructions */
-        c->tick_insn = 30000;
+        c->tick_insn = (uint32_t)(4000000.0 / 100 * c->ipc);   /* 4 MHz until the firmware sets its clock */
         c->adc_value = (uint32_t)(c->battery * 1024 + 0.5);   /* PORT: 12-bit reading, 3072 = 3.0 V */
         memcpy(&c->adc_vec, c->img + (16 + 69) * 4, 4);
         memcpy(&c->tick_vec, c->img + 0xDC, 4);
@@ -677,7 +683,7 @@ int vc_run_ms(vc_calc *c, uint32_t ms) {
                 if (r) return r;
             }
             uint32_t f = rd32(c, c->clk_addr);
-            if (f == 4000000 || f == 12000000 || f == 48000000) c->tick_insn = (uint32_t)((double)f / 100 * 0.75);
+            if (f == 4000000 || f == 12000000 || f == 48000000) c->tick_insn = (uint32_t)((double)f / 100 * c->ipc);
             int r = whole_isr(c, c->tick_vec);
             if (r) return r;
             c->ticks++;
@@ -685,6 +691,17 @@ int vc_run_ms(vc_calc *c, uint32_t ms) {
     }
     return VC_OK;
 }
+
+int vc_set_clock_ipc(vc_calc *c, double ipc) {
+    if (!c || !(ipc == 0 || (ipc >= 0.1 && ipc <= 2.0))) return VC_ERR_ARG;
+    c->ipc = ipc == 0 ? VC_IPC_REFERENCE : ipc;
+    if (c->engine == VC_ENGINE_WHOLE) {
+        uint32_t f = rd32(c, c->clk_addr);
+        c->tick_insn = (uint32_t)((f == 12000000 || f == 48000000 ? (double)f : 4000000.0) / 100 * c->ipc);
+    }
+    return VC_OK;
+}
+double vc_clock_ipc(const vc_calc *c) { return c ? c->ipc : 0; }
 
 int vc_set_battery(vc_calc *c, double volts) {
     if (!c || volts < 0 || volts > 4) return VC_ERR_ARG;
@@ -832,7 +849,7 @@ int vc_get_lcd_segments(vc_calc *c, uint8_t out[VC_LCD_BYTES]) {
  * 255 = never seen lit (no comma after the last three digits on the 16C). */
 static const uint8_t LCD_SEG[10][7] = {{194, 131, 66, 65, 129, 193, 130}, {195, 197, 68, 67, 132, 196, 133}, {199, 136, 71, 70, 134, 198, 135}, {200, 202, 73, 72, 137, 201, 138}, {204, 141, 76, 75, 139, 203, 140}, {205, 207, 78, 77, 142, 206, 143}, {209, 146, 81, 80, 144, 208, 145}, {210, 212, 83, 82, 147, 211, 148}, {214, 151, 86, 85, 149, 213, 150}, {215, 217, 88, 87, 152, 216, 153}};
 static const uint8_t LCD_DOT[10] = {3, 69, 8, 74, 13, 79, 18, 84, 23, 89};
-static const uint8_t LCD_COMMA[10] = {2, 5, 7, 10, 12, 15, 17, 255, 255, 255};
+static const uint8_t LCD_COMMA[10] = {2, 5, 7, 10, 12, 15, 17, 20, 22, 25};   /* the last three are lit only by the all-segments self test (ON + ×) */
 /* nut bits for the runner (same order) */
 static const uint8_t NUT_SEG[10][7] = {{77, 79, 75, 103, 74, 76, 78}, {83, 85, 81, 73, 80, 82, 84}, {107, 109, 105, 69, 104, 106, 108}, {89, 91, 87, 65, 86, 88, 90}, {99, 101, 97, 63, 96, 98, 100}, {11, 13, 9, 15, 8, 10, 12}, {21, 23, 19, 7, 18, 20, 22}, {29, 31, 27, 39, 26, 28, 30}, {47, 49, 45, 33, 44, 46, 48}, {53, 55, 51, 41, 50, 52, 54}};
 static const uint8_t NUT_DOT[10] = {95, 71, 111, 93, 67, 17, 25, 37, 35, 43};
@@ -939,7 +956,36 @@ uint32_t vci_rom_base(const vc_calc *c) {
     return (uint32_t)p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24;
 }
 int vci_rom_word(const vc_calc *c, uint32_t rb, uint32_t i) { return rom_word((vc_calc *)c, rb, i); }
+int vci_flash_u16(const vc_calc *c, uint32_t addr) {
+    if (!c || !c->img || addr < FLASH_BASE || addr - FLASH_BASE + 1 >= c->img_len) return -1;
+    return c->img[addr - FLASH_BASE] | c->img[addr - FLASH_BASE + 1] << 8;
+}
 int vci_ext16(const vc_calc *c) { return c ? c->ext16 : 0; }
+/* The 16C memory layout of a 16C Nut ROM at flash address rb in a multi / 3-ROM image (see VC_MEM16_*).
+ * The Path-C ROM (Nut word 0x1D4 = 0x15C) means extended memory. A multi tells E3E3 from E8E8 by the
+ * eight register-address sites of the wrapper: E3E3 left them as `add.w rd, r2, rn, lsl #7` (first
+ * halfword 0xEB02); E8E8 and later branch to caves that give the B7B7 offsets (flash 0x1318A is the first). */
+static int mem16_of_rom(const vc_calc *c, uint32_t rb) {
+    if (vci_rom_word(c, rb, 0x1D4) != 0x15C) return VC_MEM16_STD;
+    return vci_flash_u16(c, 0x1318A) == 0xEB02 ? VC_MEM16_EXT_E3E3 : VC_MEM16_EXT;
+}
+int vc_mem16_layout(const vc_calc *c) {
+    if (!c || vc_model(c) != VC_MODEL_16C) return VC_MEM16_NONE;
+    if (c->family == VC_MODEL_16C) return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
+    return mem16_of_rom(c, vci_rom_base(c));
+}
+/* Same, for the firmware file: the layout its 16C memory has, whatever model is active now. */
+int vc_firmware_mem16(const vc_calc *c) {
+    uint32_t o;
+    if (!c || !c->img || c->family == VC_MODEL_NONE || c->family == VC_FAMILY_STOCK) return VC_MEM16_NONE;
+    if (c->family == VC_MODEL_16C) return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
+    for (o = 0; o + 12 <= c->img_len; o += 2) {
+        const uint8_t *p = c->img + o;
+        if (p[2] != 0x4E || p[3] != 0 || p[4] != 0x70 || p[5] != 2 || p[6] != 0x38 || p[7] != 2 || p[8] != 0xEE || p[9] != 2) continue;
+        if (variant_at((vc_calc *)c, FLASH_BASE + o) == 160) return mem16_of_rom(c, FLASH_BASE + o);
+    }
+    return VC_MEM16_NONE;
+}
 uint32_t vci_busy_ticks(const vc_calc *c) { return c && c->engine == VC_ENGINE_WHOLE ? c->busy : 0; }
 int vci_key_held(const vc_calc *c) {
     int i; if (!c) return 0;

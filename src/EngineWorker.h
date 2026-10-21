@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 José González Divassón
 //
-// EngineWorker.h - runs the Machine on its own thread in real time (10 ms ticks, or as fast as possible in
-// turbo), like CalculatorEngine.swift on the Mac. The UI thread talks to it only through queued calls:
+// EngineWorker.h - runs the Machine on its own thread in real time (10 ms ticks; the Turbo mode was
+// removed in 0.7.1), like CalculatorEngine.swift on the Mac. The UI thread talks to it only through queued calls:
 // the slots below, post() and submit(); results come back as signals or through the submit() callback.
 #pragma once
 #include "Machine.h"
@@ -47,7 +47,6 @@ public slots:
     void pressShifted(int shift, int code);
     void releaseAll();
     void releaseLater(const QVector<int> &codes, int afterMs);
-    void setTurbo(bool on) { turbo_ = on; }
     void setInspector(bool on);
     /// Run n ms of simulated time at once (tests, screenshots).
     void runFast(int ms);
@@ -72,7 +71,7 @@ private:
     qint64 simNs_ = 0;
     DisplaySnapshot last_;
     std::optional<InspectorSnapshot> lastInspection_;
-    bool running_ = false, turbo_ = false, inspector_ = false;
+    bool running_ = false, inspector_ = false;
 };
 
 }  // namespace vc

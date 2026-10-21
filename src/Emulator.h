@@ -66,6 +66,13 @@ public:
 
     QByteArray saveMemory();                                 // throws, 2 KB
     void loadMemory(const QByteArray &mem);                  // throws
+    /// Structural check of a 2 KB image against the active 16C memory layout (standard 203 B, extended
+    /// B7B7 = E8E8, early E3E3): verdict 0 = fine, 1 = warn (another layout: it would read wrong), 2 = convert
+    /// (an E3E3 image: Emulator::convertE3E3 fixes it). A trial load cannot see this mismatch.
+    struct LayoutCheck { int verdict = 0; QString message; };
+    LayoutCheck precheckMemory(const QByteArray &mem) const;
+    /// The image in the layout of B7B7 / E8E8 (pool 8 bytes earlier), or an empty array when it is not in the E3E3 layout.
+    static QByteArray convertE3E3(const QByteArray &mem);
 
     int family() const { return vc_firmware_family(c_); }    // VC_MODEL_* / VC_FAMILY_*
     unsigned capabilities() const { return vc_capabilities(c_); }

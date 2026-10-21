@@ -61,6 +61,9 @@ struct Pool15 {
     bool operator==(const Pool15 &o) const;
 };
 
+/// The C core's pool (vc_inspect_pool15 / vc_image_pool15) as the app's Pool15.
+Pool15 pool15FromCore(const vc_pool15 &p);
+
 struct MatrixValue {
     int index = 0, rows = 0, cols = 0, first = 0;
     bool isResult = false;

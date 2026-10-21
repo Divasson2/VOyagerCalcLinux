@@ -20,7 +20,7 @@ ap.add_argument('--readelf', default='readelf')
 ap.add_argument('--strip', default='strip')
 ap.add_argument('--out', required=True)
 ap.add_argument('--tag', default='')
-ap.add_argument('--version', default='0.7.0')
+ap.add_argument('--version', default='0.7.1')
 a = ap.parse_args()
 
 HERE = os.path.dirname(os.path.abspath(__file__))

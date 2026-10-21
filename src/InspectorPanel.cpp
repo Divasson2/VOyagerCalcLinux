@@ -48,6 +48,17 @@ struct Row {
 
 bool darkPalette() { return QApplication::palette().color(QPalette::Window).lightness() < 128; }
 QColor fColour() { return darkPalette() ? QColor(0xE3A33B) : QColor(0x7F4F00); }
+/// Section header background (STACK, MEMORY, MATRICES, STORAGE REGISTERS, PROGRAM): the panel's own background with the
+/// header tint composed on top, always fully opaque (palettes may give AlternateBase an alpha; scrolled rows showed through).
+QColor sectionHeaderColor(const QPalette &pal) {
+    QColor base = pal.color(QPalette::Base); base.setAlpha(255);
+    QColor tint = pal.color(QPalette::AlternateBase).darker(darkPalette() ? 100 : 104);
+    const double a = tint.alphaF();
+    QColor out = QColor::fromRgbF(float(tint.redF() * a + base.redF() * (1 - a)), float(tint.greenF() * a + base.greenF() * (1 - a)), float(tint.blueF() * a + base.blueF() * (1 - a)));
+    out.setAlpha(255);
+    return out;
+}
+
 QColor gColour() { return darkPalette() ? QColor(0x5AA9E6) : QColor(0x0A4F8C); }
 QColor runningColour() { return darkPalette() ? QColor(0x4CBF6B) : QColor(0x1B7A3C); }
 QColor pointerBand(bool running) {
@@ -66,6 +77,48 @@ QColor poolColour(const Pool15::Segment &s) {
 QString hex2(int v) { return QStringLiteral("%1").arg(v, 2, 16, QLatin1Char('0')).toUpper(); }
 
 }  // namespace
+
+
+// The pool bar of the flyout (also used by the Matrix Editor's free-memory preview): segments, g MEM caption, legend.
+void paintPool15Bar(QPainter *p, const QRect &rc, const Pool15 &pl, const QFont &base) {
+    p->save();
+    p->setRenderHint(QPainter::Antialiasing, true);
+    const QPalette pal = QApplication::palette();
+    QColor text = pal.color(QPalette::Text), dim = text; dim.setAlphaF(0.62);
+    QFont mono = QFontDatabase::systemFont(QFontDatabase::FixedFont);
+    mono.setPointSizeF(base.pointSizeF());
+    const int pad = 10;
+    auto segs = pl.segments();
+    double total = 0; for (auto &s : segs) total += s.count;
+    total = std::max(1.0, total);
+    QRectF bar(rc.left() + pad, rc.top() + 6, rc.width() - 2 * pad, 14);
+    QPainterPath clip; clip.addRoundedRect(bar, 3, 3); p->setClipPath(clip);
+    double x = bar.left(), avail = bar.width() - (segs.size() - 1);
+    for (auto &s : segs) { double w = std::max(2.0, avail * s.count / total); p->fillRect(QRectF(x, bar.top(), w, bar.height()), poolColour(s)); x += w + 1; }
+    p->setClipping(false);
+    QFont f = mono; f.setPointSizeF(base.pointSizeF() * 0.9); p->setFont(f); p->setPen(dim);
+    p->drawText(QRect(rc.left() + pad, rc.top() + 24, rc.width() - 2 * pad, 16), Qt::AlignVCenter, p->fontMetrics().elidedText(pl.caption(), Qt::ElideRight, rc.width() - 2 * pad));
+    // legend, up to three per line
+    QStringList seen; struct Item { QString name; QColor c; int n; };
+    std::vector<Item> items;
+    for (auto &s : segs) {
+        QString name = s.kind == Pool15::Kind::Matrix ? QStringLiteral("matrices") : s.kind == Pool15::Kind::Storage ? QStringLiteral("R2…") : s.label();
+        auto it = std::find_if(items.begin(), items.end(), [&](const Item &a) { return a.name == name; });
+        if (it == items.end()) items.push_back({name, poolColour(s), s.count}); else it->n += s.count;
+    }
+    QFont lf = base; lf.setPointSizeF(base.pointSizeF() * 0.85); p->setFont(lf);
+    QFontMetrics fm(lf);
+    int lx = rc.left() + pad, ly = rc.top() + 44;
+    for (auto &it : items) {
+        QString t = QStringLiteral("%1 %2").arg(it.name).arg(it.n);
+        int w = 13 + fm.horizontalAdvance(t) + 10;
+        if (lx + w > rc.right() - pad && lx > rc.left() + pad) { lx = rc.left() + pad; ly += 14; }
+        p->setPen(Qt::NoPen); p->setBrush(it.c); p->drawRoundedRect(QRect(lx, ly + 2, 9, 9), 2, 2);
+        p->setPen(dim); p->drawText(QRect(lx + 13, ly, w, 13), Qt::AlignVCenter, t);
+        lx += w;
+    }
+    p->restore();
+}
 
 class RowModel : public QAbstractListModel {
 public:
@@ -133,7 +186,7 @@ public:
         const int pad = 10;
         switch (r.kind) {
         case RowKind::Header: {
-            p->fillRect(rc, pal.color(QPalette::AlternateBase).darker(darkPalette() ? 100 : 104));
+            p->fillRect(rc, sectionHeaderColor(pal));      // opaque: the pinned header covers the rows scrolling under it
             QFont f = base; f.setBold(true); f.setPointSizeF(base.pointSizeF() * 0.82);
             p->setFont(f); p->setPen(dim);
             p->drawText(rc.adjusted(pad, 0, -pad, 0), Qt::AlignVCenter | Qt::AlignLeft, r.name.toUpper());
@@ -156,39 +209,7 @@ public:
             }
             break;
         }
-        case RowKind::Pool: {
-            const Pool15 &pl = *r.pool;
-            auto segs = pl.segments();
-            double total = 0; for (auto &s : segs) total += s.count;
-            total = std::max(1.0, total);
-            QRectF bar(rc.left() + pad, rc.top() + 6, rc.width() - 2 * pad, 14);
-            QPainterPath clip; clip.addRoundedRect(bar, 3, 3); p->setClipPath(clip);
-            double x = bar.left(), avail = bar.width() - (segs.size() - 1);
-            for (auto &s : segs) { double w = std::max(2.0, avail * s.count / total); p->fillRect(QRectF(x, bar.top(), w, bar.height()), poolColour(s)); x += w + 1; }
-            p->setClipping(false);
-            QFont f = mono; f.setPointSizeF(base.pointSizeF() * 0.9); p->setFont(f); p->setPen(dim);
-            p->drawText(QRect(rc.left() + pad, rc.top() + 24, rc.width() - 2 * pad, 16), Qt::AlignVCenter, p->fontMetrics().elidedText(pl.caption(), Qt::ElideRight, rc.width() - 2 * pad));
-            // legend, up to three per line
-            QStringList seen; struct Item { QString name; QColor c; int n; };
-            std::vector<Item> items;
-            for (auto &s : segs) {
-                QString name = s.kind == Pool15::Kind::Matrix ? QStringLiteral("matrices") : s.kind == Pool15::Kind::Storage ? QStringLiteral("R2…") : s.label();
-                auto it = std::find_if(items.begin(), items.end(), [&](const Item &a) { return a.name == name; });
-                if (it == items.end()) items.push_back({name, poolColour(s), s.count}); else it->n += s.count;
-            }
-            QFont lf = base; lf.setPointSizeF(base.pointSizeF() * 0.85); p->setFont(lf);
-            QFontMetrics fm(lf);
-            int lx = rc.left() + pad, ly = rc.top() + 44;
-            for (auto &it : items) {
-                QString t = QStringLiteral("%1 %2").arg(it.name).arg(it.n);
-                int w = 13 + fm.horizontalAdvance(t) + 10;
-                if (lx + w > rc.right() - pad && lx > rc.left() + pad) { lx = rc.left() + pad; ly += 14; }
-                p->setPen(Qt::NoPen); p->setBrush(it.c); p->drawRoundedRect(QRect(lx, ly + 2, 9, 9), 2, 2);
-                p->setPen(dim); p->drawText(QRect(lx + 13, ly, w, 13), Qt::AlignVCenter, t);
-                lx += w;
-            }
-            break;
-        }
+        case RowKind::Pool: paintPool15Bar(p, rc, *r.pool, base); break;
         case RowKind::Matrix: {
             p->setOpacity(r.empty ? 0.45 : 1.0);
             p->setFont(base); p->setPen(dim);
@@ -268,6 +289,7 @@ public:
         sticky_ = new QWidget(viewport());
         sticky_->setAttribute(Qt::WA_TransparentForMouseEvents);
         sticky_->setObjectName(QStringLiteral("stickyHeader"));
+        sticky_->setAttribute(Qt::WA_OpaquePaintEvent);
         sticky_->hide();
         sticky_->installEventFilter(this);
         connect(verticalScrollBar(), &QScrollBar::valueChanged, this, [this] { place(); });

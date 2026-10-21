@@ -4,7 +4,7 @@
 # VoyagerCalc for Linux: Qt 6 front end around the C emulator core in core/.
 # Build:  cmake -S . -B build -G Ninja [-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64] && cmake --build build
 cmake_minimum_required(VERSION 3.21)
-project(VoyagerCalc VERSION 0.7.0 LANGUAGES C CXX)
+project(VoyagerCalc VERSION 0.7.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,7 +31,7 @@ endif()
 # --- the logic: engine, machine, inspector, analysis, documents, PDF, USB link (QtCore + QtGui, no widgets) --------
 set(LOGIC_SOURCES
   src/Emulator.cpp src/Machine.cpp src/Inspector.cpp src/Model.cpp src/ProgramAnalysis.cpp src/ProgramDocument.cpp
-  src/Stores.cpp src/EngineWorker.cpp src/KeyGlyphs.cpp src/PdfExport.cpp
+  src/Stores.cpp src/EngineWorker.cpp src/KeyGlyphs.cpp src/PdfExport.cpp src/KeyClick.cpp src/Matrix15.cpp
   src/usb/CalculatorLink.cpp src/usb/UsbLog.cpp src/usb/StepGuard.cpp src/usb/UsbPlatform.cpp
   src/usb/PortTransport.cpp src/usb/UsbSelfTestPort.cpp)
 # the USB transport of each operating system: Linux = /dev/hidrawN + udev rule; Windows = SetupAPI + hid.dll (no driver, no setup)
@@ -44,12 +44,15 @@ add_library(voyagerlogic STATIC ${LOGIC_SOURCES} resources/voyagercalc.qrc)
 target_include_directories(voyagerlogic PUBLIC src)
 target_link_libraries(voyagerlogic PUBLIC voyagercore Qt6::Core Qt6::Gui)
 if(WIN32)
-  target_link_libraries(voyagerlogic PUBLIC hid setupapi)
+  target_link_libraries(voyagerlogic PUBLIC hid setupapi winmm)   # winmm: PlaySound for the key click
+else()
+  find_package(Threads REQUIRED)
+  target_link_libraries(voyagerlogic PUBLIC Threads::Threads ${CMAKE_DL_LIBS})   # KeyClick: playback thread, dlopen of the audio libraries
 endif()
 
 # --- the widgets -----------------------------------------------------------------------------------------------
 set(UI_SOURCES "")
-foreach(f LcdPainter CalculatorWidget InspectorPanel ProgramInfoDialog WelcomeWidget MainWindow)
+foreach(f LcdPainter CalculatorWidget InspectorPanel ProgramInfoDialog WelcomeWidget MatrixEditor MainWindow)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/${f}.cpp")
     list(APPEND UI_SOURCES src/${f}.cpp)
   endif()
@@ -88,7 +91,7 @@ function(vc_test name)
     set_target_properties(tst_${name} PROPERTIES WIN32_EXECUTABLE OFF)
   endif()
 endfunction()
-set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app)
+set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app selftest speed matrix)
 if(NOT WIN32)
   list(APPEND VC_TESTS usb)            # hidraw / udev / sysfs: Linux only
 endif()

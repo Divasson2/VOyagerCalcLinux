@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 José González Divassón
 #include "Machine.h"
+#include "Matrix15.h"
 #include <QCryptographicHash>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -87,7 +88,7 @@ bool Machine::shiftPending(int shift) {
     const char *want = shift == keyF ? "f" : "g";
     uint64_t bits = calc.display().annBits;
     for (const Annunciator &a : m.annunciators())
-        if (QString::fromLatin1(a.label) == QLatin1String(want) && (bits >> a.bit & 1)) return true;
+        if (QString::fromLatin1(a.label) == QLatin1String(want) && a.bit >= 0 && a.bit < 64 && (bits >> a.bit & 1)) return true;
     return false;
 }
 
@@ -151,6 +152,14 @@ QByteArray Machine::memory(bool turnBackOn) {
     QByteArray d = calc.saveMemory();
     if (wasOn && turnBackOn) powerOn();
     return d;
+}
+
+void Machine::writeMatrix15(int m, int rows, int cols, const std::vector<uint64_t> &raw) {
+    if (model() != 15) throw Error(QStringLiteral("The Matrix Editor needs the HP-15C (the calculator runs another model now)."));
+    QByteArray mem = memory(true);
+    const QString err = matrix15::write(&mem, variant(), m, rows, cols, raw);
+    if (!err.isEmpty()) throw Error(err);
+    putMemory(mem);
 }
 
 QByteArray Machine::rawMemory() {
@@ -255,6 +264,18 @@ Machine::MemoryCheck Machine::checkMemory(const QByteArray &mem, const QByteArra
     } catch (const std::exception &) {
         r.kind = MemoryCheck::Unreadable;
         return r;
+    }
+}
+
+Emulator::LayoutCheck Machine::layoutCheck(const QByteArray &mem, const QByteArray &firmware, int variant) {
+    try {
+        Machine m;
+        m.loadFirmware(firmware);
+        m.boot(nullptr);
+        if (m.variant() != variant) m.switchModel(variant);
+        return m.calc.precheckMemory(mem);
+    } catch (const std::exception &) {
+        return Emulator::LayoutCheck();
     }
 }
 

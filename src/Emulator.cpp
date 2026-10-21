@@ -4,7 +4,7 @@
 
 namespace vc {
 
-Emulator::Emulator() : c_(vc_create()) {}
+Emulator::Emulator() : c_(vc_create()) { vc_set_clock_ipc(c_, VC_IPC_REAL); }   // real 15C CE speed (0.7.1 test10)
 Emulator::~Emulator() { vc_destroy(c_); }
 
 QString Emulator::lastError() const {
@@ -52,6 +52,22 @@ QByteArray Emulator::saveMemory() {
 void Emulator::loadMemory(const QByteArray &mem) {
     if (mem.size() != kMemorySize) throw Error(QStringLiteral("A calculator memory is 2048 bytes, not %1.").arg(mem.size()));
     check(vc_load_memory(c_, reinterpret_cast<const uint8_t *>(mem.constData())));
+}
+
+Emulator::LayoutCheck Emulator::precheckMemory(const QByteArray &mem) const {
+    LayoutCheck r;
+    if (mem.size() != kMemorySize) return r;
+    vc_memcheck k;
+    if (vc_memory_precheck(c_, reinterpret_cast<const uint8_t *>(mem.constData()), &k) != VC_OK) return r;
+    r.verdict = k.verdict;
+    r.message = QString::fromUtf8(k.message);
+    return r;
+}
+
+QByteArray Emulator::convertE3E3(const QByteArray &mem) {
+    if (mem.size() != kMemorySize) return QByteArray();
+    QByteArray out = mem;
+    return vc_memory_convert_e3e3(reinterpret_cast<uint8_t *>(out.data())) == 1 ? out : QByteArray();
 }
 
 QString Emulator::firmwareInfo() const {

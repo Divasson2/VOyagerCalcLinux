@@ -96,6 +96,11 @@ QRectF CalculatorWidget::zoneRect(int code, KeyPart part) const {
     }
 }
 
+QColor CalculatorWidget::lcdLift(int model) {
+    // per model (Jose, 0.7.1 test13): 15C and 16C lighter grey; the 12C keeps the photo's original glass (no lift)
+    return model == 12 ? QColor() : QColor(0x66, 0x66, 0x66);
+}
+
 int CalculatorWidget::keyAt(const QPointF &pos, KeyPart *part) const {
     QRectF fr = faceRect();
     if (!fr.contains(pos)) return -1;
@@ -108,7 +113,7 @@ int CalculatorWidget::keyAt(const QPointF &pos, KeyPart *part) const {
         Rect4 face, f, g; bool hasF, hasF2;
         zonesOf(k->code, &face, &f, &g, &hasF, &hasF2);
         auto in = [&](const Rect4 &r) { return px >= r.x && px < r.x + r.w && py >= r.y && py < r.y + r.h; };
-        *part = hasF && in(f) ? KeyPart::FLabel : hasF2 && in(g) ? KeyPart::GLabel : KeyPart::Face;
+        *part = !legendClicks_ ? KeyPart::Face : hasF && in(f) ? KeyPart::FLabel : hasF2 && in(g) ? KeyPart::GLabel : KeyPart::Face;
     }
     return k->code;
 }
@@ -134,6 +139,16 @@ void CalculatorWidget::paintEvent(QPaintEvent *) {
         cache_.setDevicePixelRatio(devicePixelRatioF());
     }
     p.drawPixmap(fr.topLeft(), cache_);
+    if (const QColor lift = lcdLift(model_); lift.isValid()) {
+        // the LCD background: the photo's glass lifted to a lighter grey (fixed per model, no option).
+        // Screen blend keeps the photo's texture and edges; the segments are drawn on top, unchanged.
+        p.save();
+        p.setCompositionMode(QPainter::CompositionMode_Screen);
+        QRectF g = glassRect();
+        p.setPen(Qt::NoPen); p.setBrush(lift);
+        p.drawRoundedRect(g, g.height() * 0.04, g.height() * 0.04);
+        p.restore();
+    }
     paintLcd(p, glassRect(), display_);
 
     // pressed keys sink: shadow where the cap was, the cap shifted down and darkened
@@ -164,11 +179,13 @@ void CalculatorWidget::paintEvent(QPaintEvent *) {
     if (hoverCode_ >= 0) {
         const KeySpec *k = Model::with(model_).key(hoverCode_);
         if (k && hoverPart_ != KeyPart::Face) {
+            // 0.7.1: a brighter highlight (fill + outline) so the clickable legend is obvious
             QRectF r = zoneRect(hoverCode_, hoverPart_);
-            QColor c = hoverPart_ == KeyPart::FLabel ? kGold : kBlueLegend; c.setAlphaF(0.18);
-            p.setPen(Qt::NoPen); p.setBrush(c);
-            p.drawRoundedRect(r, 3, 3);
-        } else if (k && k->nShortcuts > 0) {
+            QColor c = hoverPart_ == KeyPart::FLabel ? kGold : kBlueLegend, line = c.lighter(125);
+            c.setAlphaF(0.40); line.setAlphaF(0.95);
+            p.setPen(QPen(line, std::max(1.2, r.height() * 0.06))); p.setBrush(c);
+            p.drawRoundedRect(r.adjusted(0.5, 0.5, -0.5, -0.5), 3, 3);
+        } else if (k && k->nShortcuts > 0 && showKeyHelp_) {
             QRectF cap = keyRect(hoverCode_);
             QString hint = shortcutHint(*k);
             QFont f = font(); f.setBold(true); f.setPixelSize(int(std::max(9.0, cap.height() * 0.28)));
@@ -181,16 +198,6 @@ void CalculatorWidget::paintEvent(QPaintEvent *) {
             p.setPen(Qt::white);
             p.drawText(bubble, Qt::AlignCenter, hint);
         }
-    }
-    if (turbo_) {
-        QRectF g = glassRect();
-        QFont f = font(); f.setBold(true); f.setPixelSize(int(std::max(8.0, fr.height() * 0.026)));
-        p.setFont(f);
-        QFontMetricsF fm(f);
-        QRectF r(g.left(), g.bottom() + fr.height() * 0.012, fm.horizontalAdvance("TURBO") + 10, fm.height() + 2);
-        p.setPen(QPen(kGold, 1)); p.setBrush(Qt::NoBrush);
-        p.drawRoundedRect(r, r.height() / 2, r.height() / 2);
-        p.drawText(r, Qt::AlignCenter, QStringLiteral("TURBO"));
     }
 }
 
@@ -224,6 +231,7 @@ void CalculatorWidget::mouseMoveEvent(QMouseEvent *e) {
 bool CalculatorWidget::event(QEvent *e) {
     if (e->type() == QEvent::ToolTip) {
         auto *h = static_cast<QHelpEvent *>(e);
+        if (!showKeyHelp_) { QToolTip::hideText(); e->ignore(); return true; }
         KeyPart part;
         int c = keyAt(h->pos(), &part);
         if (c >= 0) QToolTip::showText(h->globalPos(), helpFor(c, part), this);

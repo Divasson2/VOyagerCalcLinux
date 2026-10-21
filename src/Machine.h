@@ -70,6 +70,8 @@ public:
     void switchModel(int v);                     // switch and check
     void perform(KeyChord c);
     QString memoryStatus();                      // g MEM while RCL is held (15C)
+    /// 15C: DIM matrix m (0..4) to rows x cols and store raw (row-major BCD) in the memory, as the Matrix Editor's Apply. Throws Error.
+    void writeMatrix15(int m, int rows, int cols, const std::vector<uint64_t> &raw);
 
     static QString variantName(int v);           // "12C", "15C", "15C (15.2)", "16C"
     static int modelMenuKey(int variant);        // key under each label of the multi-ROM model menu
@@ -83,6 +85,8 @@ public:
         bool operator==(const MemoryCheck &o) const { return kind == o.kind && (kind != Changed && kind != WrongSize || bytes == o.bytes); }
     };
     static MemoryCheck checkMemory(const QByteArray &mem, const QByteArray &firmware, int variant);
+    /// Structural 16C layout check on a scratch machine (see Emulator::precheckMemory); verdict 0 when it cannot be told.
+    static Emulator::LayoutCheck layoutCheck(const QByteArray &mem, const QByteArray &firmware, int variant);
     static std::vector<int> identifyMemory(const QByteArray &mem, const QByteArray &firmware, const std::vector<int> &among);
     static bool needs152(const QByteArray &mem, const QByteArray &firmware, const std::vector<int> &among);
 

@@ -370,6 +370,23 @@ private slots:
         prog->verticalScrollBar()->setValue(prog->verticalScrollBar()->maximum());
         QTest::qWait(50);
         QCOMPARE(p.pinnedHeaderRect(InspectorPanel::Program).top(), 0);
+        {   // the pinned bar is opaque even when the style gives AlternateBase an alpha: no row text shows through it
+            QPalette old = QApplication::palette(), pal = old;
+            pal.setColor(QPalette::AlternateBase, QColor(255, 0, 0, 60));
+            QApplication::setPalette(pal);
+            prog->verticalScrollBar()->setValue(prog->verticalScrollBar()->maximum() / 2 + 7);   // a listing row half under the bar
+            auto colours = [&] {
+                const QRect bar = p.pinnedHeaderRect(InspectorPanel::Program);
+                QImage img = prog->viewport()->grab().toImage().convertToFormat(QImage::Format_RGB32);
+                QSet<QRgb> seen;
+                for (int y = bar.top() + 1; y < bar.bottom(); ++y) for (int x = bar.width() * 75 / 100; x < bar.width() - 2; ++x) seen.insert(img.pixel(x, y));
+                return seen;
+            };
+            QSet<QRgb> seen;
+            for (int i = 0; i < 40 && (seen = colours()).size() != 1; ++i) QTest::qWait(50);   // slow machines (qemu): let it settle
+            QApplication::setPalette(old);
+            QVERIFY2(seen.size() == 1, qPrintable(QString("%1 colours under the pinned bar").arg(seen.size())));
+        }
         // nothing overlaps the registers area: the program list starts below the register list, the pinned bar is inside the program viewport
         QVERIFY(prog->geometry().top() >= regs->geometry().bottom());
         QVERIFY(prog->viewport()->rect().contains(p.pinnedHeaderRect(InspectorPanel::Program)));

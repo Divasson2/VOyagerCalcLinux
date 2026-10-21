@@ -33,9 +33,9 @@ static std::vector<LegendBracket> vec(const LegendBracket *b, size_t n) { return
 static std::vector<Annunciator> vec(const Annunciator *a, size_t n) { return {a, a + n}; }
 #define ARR(x) x, sizeof(x) / sizeof(x[0])
 
-const Model &Model::hp12c() { static Model m(12, "12C", "bin12c", kKeys12C, vec(ARR(kBrackets12C)), vec(ARR(kAnnunciators12C)), kGZoneFraction12C); return m; }
-const Model &Model::hp15c() { static Model m(15, "15C", "bin15c", kKeys15C, vec(ARR(kBrackets15C)), vec(ARR(kAnnunciators15C)), kGZoneFraction15C); return m; }
-const Model &Model::hp16c() { static Model m(16, "16C", "bin16c", kKeys16C, vec(ARR(kBrackets16C)), vec(ARR(kAnnunciators16C)), kGZoneFraction16C); return m; }
+const Model &Model::hp12c() { static Model m(12, "12C", "bin12c", kKeys12C, vec(ARR(kBrackets12C)), vec(ARR(kVoyagerAnnunciators)), kGZoneFraction12C); return m; }
+const Model &Model::hp15c() { static Model m(15, "15C", "bin15c", kKeys15C, vec(ARR(kBrackets15C)), vec(ARR(kVoyagerAnnunciators)), kGZoneFraction15C); return m; }
+const Model &Model::hp16c() { static Model m(16, "16C", "bin16c", kKeys16C, vec(ARR(kBrackets16C)), vec(ARR(kVoyagerAnnunciators)), kGZoneFraction16C); return m; }
 const Model &Model::with(int id) { return id == 12 ? hp12c() : id == 16 ? hp16c() : hp15c(); }
 
 QString shortcutLabel(const Shortcut &s) {

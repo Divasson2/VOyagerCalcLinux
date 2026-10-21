@@ -10,6 +10,7 @@
 #include "PdfExport.h"
 #include "ProgramDocument.h"
 #include "Stores.h"
+#include "MatrixEditor.h"
 #include "usb/CalculatorLink.h"
 #include "usb/HidTransport.h"
 #include <QMainWindow>
@@ -68,6 +69,7 @@ public:
         std::function<QString(const QString &fileKind, const QString &filter)> openFile;
         std::function<QString(const QString &suggestedName, const QString &filter)> saveFile;
         std::function<bool(const QString &)> askFixPermissions;       // offered with the "no access" message
+        std::function<void(MatrixEditor::Hooks &)> matrixHooks;       // tests: replace the clipboard / paste preview of the Matrix Editor
     };
     Prompts prompts;
 
@@ -152,7 +154,12 @@ public:
     void showAbout();
     void saveStateNow(bool turnBackOn = false);
     void setShowInspector(bool on);
-    void setTurbo(bool on);
+    void setShowKeyHelp(bool on);
+    void setLegendClicks(bool on);                    // View ▸ Click f/g Labels (on by default)
+    void setKeyClick(bool on);                        // View ▸ Key Click Sound (off by default)
+    bool keyClick() const { return keyClick_; }
+    void openMatrixEditor();                          // Calculator ▸ Matrix Editor… (15C)
+    MatrixEditor *matrixEditor() const { return matrixEditor_; }
     void setPaper(Paper p);
     void editComment(int step);
 
@@ -207,7 +214,7 @@ private:
     InspectorPanel *inspector_;
     QLabel *busy_;
     QMenu *fileMenu_ = nullptr, *calcMenu_ = nullptr, *modelMenu_ = nullptr, *keysMenu_ = nullptr, *usbMenu_ = nullptr;
-    QAction *actOpen_, *actSave_, *actInfo_, *actOpenNotes_, *actSaveNotes_, *actPdf_, *actText_, *actClear_, *actInspector_, *actTurbo_,
+    QAction *actOpen_, *actSave_, *actInfo_, *actOpenNotes_, *actSaveNotes_, *actPdf_, *actText_, *actClear_, *actInspector_, *actKeyHelp_, *actLegend_ = nullptr, *actClick_ = nullptr, *actMatrix_ = nullptr,
             *actPower_, *actReset_, *actRead_, *actWrite_, *actSaveCalc_, *actFix_, *actA4_, *actLetter_, *actRelease_;
     QActionGroup *modelGroup_ = nullptr;
 
@@ -234,7 +241,8 @@ private:
     ExportNameMemory exportNames_;
     QPointer<QDialog> usbLogWindow_;
     Paper paper_ = Paper::A4;
-    bool showInspector_ = false, turbo_ = false;
+    bool showInspector_ = false, keyClick_ = false;
+    QPointer<MatrixEditor> matrixEditor_;
     bool restorePending_ = true;                      // the restored window has not met its first layout yet
     bool savedHadInspector_ = false;                  // the saved window size already included the flyout
     int inspectorWidth_ = 340;                        // the flyout's own width, remembered separately

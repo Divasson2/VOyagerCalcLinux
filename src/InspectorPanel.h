@@ -14,6 +14,9 @@
 #include <memory>
 
 class QLabel;
+class QPainter;
+class QFont;
+class QRect;
 class QListView;
 class QCheckBox;
 class QButtonGroup;
@@ -22,6 +25,9 @@ class QStackedLayout;
 namespace vc {
 
 class RowModel;
+struct Pool15;
+/// The HP-15C pool bar (segments, g MEM caption, legend) into rc; 74 px high looks right.
+void paintPool15Bar(QPainter *p, const QRect &rc, const Pool15 &pool, const QFont &base);
 
 class InspectorPanel : public QWidget {
     Q_OBJECT

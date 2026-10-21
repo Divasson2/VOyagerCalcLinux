@@ -4,6 +4,8 @@
 #include "MainWindow.h"
 #include "CalculatorWidget.h"
 #include "InspectorPanel.h"
+#include "KeyClick.h"
+#include "MatrixEditor.h"
 #include "ProgramInfoDialog.h"
 #include "WelcomeWidget.h"
 #include "usb/UsbPlatform.h"
@@ -292,6 +294,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     makeTransport = [] { return makeDefaultTransport(); };
 
     buildMenus();
+    setShowKeyHelp(QSettings().value(QStringLiteral("showKeyHelp"), false).toBool());   // off by default (0.7.1: the hover help was intrusive)
+    setLegendClicks(QSettings().value(QStringLiteral("legendClicks"), true).toBool());  // 0.7.1: a setting (on = as before)
+    setKeyClick(QSettings().value(QStringLiteral("keyClick"), false).toBool());
     updateMenus();
     qApp->installEventFilter(this);
 }
@@ -336,16 +341,27 @@ void MainWindow::buildMenus() {
 
     QMenu *view = menuBar()->addMenu(QStringLiteral("View"));
     actInspector_ = act(view, QStringLiteral("Registers && Program"), [this] { setShowInspector(!showInspector_); }, QKeySequence(Qt::CTRL | Qt::Key_I));
+    actKeyHelp_ = act(view, QStringLiteral("Show Key Help"), [this] { setShowKeyHelp(!calc_->showKeyHelp()); });
+    actKeyHelp_->setCheckable(true);
+    actKeyHelp_->setToolTip(QStringLiteral("Show each key's functions and keyboard shortcut when the pointer rests on it"));
     actInspector_->setCheckable(true);
+    view->addSeparator();
+    actLegend_ = act(view, QStringLiteral("Click f/g Labels"), [this] { setLegendClicks(!calc_->legendClicks()); });
+    actLegend_->setCheckable(true);
+    actLegend_->setToolTip(QStringLiteral("A click on a key's gold (f) or blue (g) label types f or g and the key; the label lights up under the pointer"));
+    actClick_ = act(view, QStringLiteral("Key Click Sound"), [this] { setKeyClick(!keyClick_); });
+    actClick_->setCheckable(true);
+    actClick_->setToolTip(QStringLiteral("A short, deep click at every key press"));
 
     calcMenu_ = menuBar()->addMenu(QStringLiteral("Calculator"));
-    actTurbo_ = act(calcMenu_, QStringLiteral("Turbo"), [this] { setTurbo(!turbo_); }, QKeySequence(Qt::CTRL | Qt::Key_T));
-    actTurbo_->setCheckable(true);
     // "ON / OFF   Esc": the text after the tab is shown at the right like a shortcut, but nothing is bound to it: the key itself is handled
     // in ONE place (the face widget's key path, which keeps ON held while Esc is down), so it can never fire twice (0.6.9).
     actPower_ = act(calcMenu_, QStringLiteral("ON / OFF\tEsc"), [this] { togglePower(); });
     calcMenu_->addSeparator();
     actReset_ = act(calcMenu_, QStringLiteral("Reset Calculator (clears memory)…"), [this] { resetCalculator(); });
+    calcMenu_->addSeparator();
+    actMatrix_ = act(calcMenu_, QStringLiteral("Matrix Editor…"), [this] { openMatrixEditor(); }, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_M));
+    actMatrix_->setToolTip(QStringLiteral("HP-15C: edit, paste or copy matrices A–E in the emulator's memory"));
     calcMenu_->addSeparator();
     usbMenu_ = calcMenu_->addMenu(QStringLiteral("Real Calculator (USB)"));
     actRead_ = act(usbMenu_, QStringLiteral("Read from Calculator"), [this] { readFromCalculator(); });
@@ -409,7 +425,12 @@ void MainWindow::updateMenus() {
     for (QAction *a : {actInfo_, actOpenNotes_, actSaveNotes_, actPdf_, actText_, actClear_}) a->setEnabled(run && hasInspector());
     actInspector_->setEnabled(run && hasInspector());
     actInspector_->setChecked(showInspector_ && hasInspector());
-    actTurbo_->setChecked(turbo_);
+    const bool is15 = run && hasMemoryFiles() && hasInspector() && (snap_.model ? snap_.model : calc_->modelId()) == 15 && !switching_;
+    actMatrix_->setEnabled(is15);
+    if (matrixEditor_ && matrixEditor_->property("vcAvailable").toBool() != is15) {
+        matrixEditor_->setProperty("vcAvailable", is15);
+        matrixEditor_->setAvailable(is15);
+    }
     actA4_->setChecked(paper_ == Paper::A4); actLetter_->setChecked(paper_ == Paper::Letter);
     actPower_->setEnabled(run); actReset_->setEnabled(run);
     const bool busy = linkBusy();
@@ -508,7 +529,7 @@ void MainWindow::onBooted(bool ok, const QString &message, const QString &note, 
     memoryFileName_.clear(); lastProgramKeys_.clear(); notesPath_.clear(); exportNames_.forgetAll();
     doc_ = ProgramDocument();
     loadStoredNotes();
-    worker_->post([w = worker_, ins = showInspector_ && hasInspector(), t = turbo_] { w->setInspector(ins); w->setTurbo(t); });
+    worker_->post([w = worker_, ins = showInspector_ && hasInspector()] { w->setInspector(ins); });
     inspector_->setEmptyText(isStock() ? QStringLiteral("HP's original 12C firmware keeps its registers and program in a layout this panel cannot read, so Registers & Program is not available with it.")
                                        : QStringLiteral("The calculator is switching models."));
     updateInspectorVisibility();
@@ -570,9 +591,48 @@ void MainWindow::setShowInspector(bool on) {
     updateInspectorVisibility();
 }
 
-void MainWindow::setTurbo(bool on) {
-    turbo_ = on; actTurbo_->setChecked(on); calc_->setTurbo(on);
-    if (worker_) worker_->post([w = worker_, on] { w->setTurbo(on); });
+void MainWindow::setShowKeyHelp(bool on) {
+    calc_->setShowKeyHelp(on);
+    if (actKeyHelp_) actKeyHelp_->setChecked(on);
+    QSettings().setValue(QStringLiteral("showKeyHelp"), on);
+}
+
+void MainWindow::setLegendClicks(bool on) {
+    calc_->setLegendClicks(on);
+    if (actLegend_) actLegend_->setChecked(on);
+    QSettings().setValue(QStringLiteral("legendClicks"), on);
+}
+
+void MainWindow::setKeyClick(bool on) {
+    keyClick_ = on;
+    if (actClick_) actClick_->setChecked(on);
+    QSettings().setValue(QStringLiteral("keyClick"), on);
+}
+
+void MainWindow::openMatrixEditor() {
+    if (!running_ || !hasMemoryFiles()) return;
+    if ((snap_.model ? snap_.model : calc_->modelId()) != 15) return showError(QStringLiteral("The Matrix Editor is for the HP-15C. Switch the model to the 15C first."));
+    if (!matrixEditor_) {
+        MatrixEditor::Hooks h;
+        h.fetch = [this]() -> std::optional<std::pair<QByteArray, int>> {
+            if (!worker_ || !running_) return std::nullopt;
+            QByteArray img; int var = 0;
+            if (!worker_->performAndWait([&](Machine &m) { if (m.model() == 15) { img = m.rawMemory(); var = m.variant(); } })) return std::nullopt;
+            if (img.size() != VC_MEMORY_SIZE || (var != 150 && var != 152)) return std::nullopt;
+            return std::make_pair(img, var);
+        };
+        h.apply = [this](int m, int r, int c, std::vector<uint64_t> raw, std::function<void(const QString &)> done) {
+            if (!worker_) return done(QStringLiteral("The calculator is not running."));
+            worker_->submit(this, [m, r, c, raw](Machine &mc) { mc.writeMatrix15(m, r, c, raw); }, [this, done](const QString &e) {
+                if (e.isEmpty()) saveStateNow(true);          // keep it across a restart, like a loaded memory file
+                done(e);
+            });
+        };
+        if (prompts.matrixHooks) prompts.matrixHooks(h);
+        matrixEditor_ = new MatrixEditor(h, this);
+        matrixEditor_->setProperty("vcAvailable", true);
+    } else matrixEditor_->reload();
+    matrixEditor_->show(); matrixEditor_->raise(); matrixEditor_->activateWindow();
 }
 
 void MainWindow::setPaper(Paper p) {
@@ -603,12 +663,14 @@ void MainWindow::resizeEvent(QResizeEvent *e) {
 
 void MainWindow::press(int code) {
     if (!running_) return;
+    if (keyClick_) KeyClick::play();
     applyLatch(latch_.press(code));
 }
 void MainWindow::release(int code) { applyLatch(latch_.release(code)); }
 
 void MainWindow::pressLegend(int code, int shift) {
     if (!running_) return;
+    if (keyClick_) KeyClick::play();
     applyLatch(latch_.unlatchAll());
     pressed_.insert(shown(code)); calc_->setPressed(pressed_);
     worker_->post([w = worker_, shift, code] { w->pressShifted(shift, code); });
@@ -661,10 +723,12 @@ void MainWindow::perform(KeyChord c) {
     worker_->submit(this, [c](Machine &m) { m.perform(c); }, [this](const QString &err) { if (!err.isEmpty()) showError(err); });
 }
 
-bool MainWindow::eventFilter(QObject *, QEvent *e) {
+bool MainWindow::eventFilter(QObject *obj, QEvent *e) {
     if ((e->type() != QEvent::KeyPress && e->type() != QEvent::KeyRelease) || !running_) return false;
+    if (auto *tw = qobject_cast<QWidget *>(obj); tw && tw->window() != this) return false;   // aimed at another window
     if (QApplication::activeWindow() != this || QApplication::activeModalWidget()) return false;
     QWidget *fw = QApplication::focusWidget();
+    if (fw && fw->window() != this) return false;     // another window (the Matrix Editor) has the keyboard
     if (qobject_cast<QLineEdit *>(fw) || qobject_cast<QTextEdit *>(fw) || qobject_cast<QPlainTextEdit *>(fw) || qobject_cast<QAbstractSpinBox *>(fw)
         || qobject_cast<QComboBox *>(fw)) return false;
     if (stack_->currentWidget() != split_) return false;
@@ -793,18 +857,30 @@ void MainWindow::offerMemory(const QByteArray &data, const QString &source) {
     const std::vector<int> imgs = fw_.images;
     const QString name = QStringLiteral("HP-") + model().name();
     QThread *t = QThread::create([this, data, fw, v, imgs, name, source] {
-        Machine::MemoryCheck verdict = Machine::checkMemory(data, fw, v);
+        // 16C memory layouts (standard 203 B / extended B7B7 = E8E8 / early E3E3): a trial load cannot see a mismatch
+        // (the firmware accepts the image, the registers just read wrong), so the structure is checked first.
+        QByteArray img = data;
+        QString src = source;
+        Emulator::LayoutCheck lay = Machine::layoutCheck(data, fw, v);
+        if (lay.verdict == 2) {
+            const QByteArray conv = Emulator::convertE3E3(data);
+            if (!conv.isEmpty()) { img = conv; src += QStringLiteral(" (converted from the early E3E3 layout)"); lay = Emulator::LayoutCheck(); }
+        }
+        Machine::MemoryCheck verdict = Machine::checkMemory(img, fw, v);
         std::vector<int> others;
-        if (!verdict.fits()) { std::vector<int> among; for (int i : imgs) if (i != v) among.push_back(i); others = Machine::identifyMemory(data, fw, among); }
-        QMetaObject::invokeMethod(qApp, [this, guard = QPointer<MainWindow>(this), data, verdict, others, name, source] {
+        if (!verdict.fits()) { std::vector<int> among; for (int i : imgs) if (i != v) among.push_back(i); others = Machine::identifyMemory(img, fw, among); }
+        QMetaObject::invokeMethod(qApp, [this, guard = QPointer<MainWindow>(this), img, verdict, others, name, src, lay] {
             if (!guard) return;
             auto go = [&](const PendingAction &a) {
                 int r = prompts.confirm ? prompts.confirm(a) : 0;
                 if (r == 2) backupThenConfirm(a); else if (r == 1) confirm(a);
             };
-            PendingAction a; a.data = data; a.source = source;
+            PendingAction a; a.data = img; a.source = src;
             switch (verdict.kind) {
-            case Machine::MemoryCheck::Fits: a.kind = PendingAction::LoadMemory; go(a); break;
+            case Machine::MemoryCheck::Fits:
+                if (lay.verdict == 1) { a.kind = PendingAction::LoadMemoryAnyway; a.reason = lay.message; }
+                else a.kind = PendingAction::LoadMemory;
+                go(a); break;
             case Machine::MemoryCheck::NeedsMoreMemory: {
                 QString m = QStringLiteral("It uses more registers than the %1 mode this firmware is running has (g MEM gives Error 10, and DIM (i) cannot fix it). "
                                            "It is a memory from the HP-15C (15.2) double-memory mode.").arg(name);
@@ -813,7 +889,7 @@ void MainWindow::offerMemory(const QByteArray &data, const QString &source) {
                 go(a); break;
             }
             case Machine::MemoryCheck::WrongSize:
-                showError(QStringLiteral("The memory from %1 is %2 bytes; a calculator memory is 2048 bytes. Nothing was loaded.").arg(source).arg(verdict.bytes));
+                showError(QStringLiteral("The memory from %1 is %2 bytes; a calculator memory is 2048 bytes. Nothing was loaded.").arg(src).arg(verdict.bytes));
                 break;
             default: {
                 QString m = QStringLiteral("In a trial load on this firmware's %1").arg(name);

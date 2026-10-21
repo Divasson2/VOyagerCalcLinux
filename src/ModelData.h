@@ -7,6 +7,15 @@
 
 namespace vc {
 
+/// The Voyager LCD glass is the same part on the 12C, 15C and 16C: every annunciator is printed on it at a fixed place, and
+/// each one is visible only when the firmware lights its segment. So all models share one layout (the all-segments self test,
+/// ON + ×, then looks the same on every model, as on the real calculators). Bits: LCD controller memory; cell: left edge in
+/// digit cells from the left. RAD sits right after G (together they read "GRAD"). The low-battery "*" segment has not been
+/// found in the LCD memory yet (bit -1: drawn unlit, never lit).
+inline const Annunciator kVoyagerAnnunciators[] = {
+    {"*", -1, -0.05}, {"USER", 4, 0.75}, {"f", 6, 2.45}, {"g", 9, 3.15}, {"BEGIN", 11, 3.85}, {"G", 14, 5.35}, {"RAD", 16, 5.35},
+    {"D.MY", 19, 6.85}, {"C", 21, 8.0}, {"PRGM", 24, 8.55} };
+
 inline const KeySpec kKeys12C[39] = {
     {0, "n", "n", "AMORT", "12×", 1, {{109, -1}}, KeyStyle::Normal},
     {1, "i", "i", "INT", "12÷", 1, {{105, -1}}, KeyStyle::Normal},
@@ -49,7 +58,6 @@ inline const KeySpec kKeys12C[39] = {
     {39, "+", "+", "", "", 1, {{43, -1}}, KeyStyle::Normal},
 };
 inline const LegendBracket kBrackets12C[] = { {"CLEAR", 21, 24} };
-inline const Annunciator kAnnunciators12C[] = { {"f", 6, 3.0}, {"g", 9, 4.0}, {"BEGIN", 11, 5.0}, {"D.MY", 19, 7.0}, {"PRGM", 24, 8.6} };
 
 inline const KeySpec kKeys15C[39] = {
     {0, "√x", "√x", "A", "x²", 1, {{113, -1}}, KeyStyle::Normal},
@@ -93,7 +101,6 @@ inline const KeySpec kKeys15C[39] = {
     {39, "+", "+", "Py,x", "Cy,x", 1, {{43, -1}}, KeyStyle::Normal},
 };
 inline const LegendBracket kBrackets15C[] = { {"CLEAR", 21, 24} };
-inline const Annunciator kAnnunciators15C[] = { {"USER", 4, 1.2}, {"f", 6, 3.0}, {"g", 9, 4.0}, {"G", 14, 5.8}, {"RAD", 16, 6.2}, {"C", 21, 7.8}, {"PRGM", 24, 8.6} };
 
 inline const KeySpec kKeys16C[39] = {
     {0, "A", "A", "SL", "LJ", 1, {{97, -1}}, KeyStyle::Normal},
@@ -137,7 +144,6 @@ inline const KeySpec kKeys16C[39] = {
     {39, "+", "+", "OR", "x=0", 1, {{43, -1}}, KeyStyle::Normal},
 };
 inline const LegendBracket kBrackets16C[] = { {"SHOW", 12, 15}, {"CLEAR", 22, 24} };
-inline const Annunciator kAnnunciators16C[] = { {"f", 6, 3.0}, {"g", 9, 4.0}, {"C", 21, 7.6}, {"G", 14, 6.3}, {"PRGM", 24, 8.6} };
 
 inline const double kGZoneFraction12C = 0.365, kGZoneFraction15C = 0.364, kGZoneFraction16C = 0.352;
 
