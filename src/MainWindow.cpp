@@ -6,6 +6,7 @@
 #include "InspectorPanel.h"
 #include "KeyClick.h"
 #include "MatrixEditor.h"
+#include "ProgramEntry15.h"
 #include "ProgramInfoDialog.h"
 #include "WelcomeWidget.h"
 #include "usb/UsbPlatform.h"
@@ -246,6 +247,9 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
         box.exec();
         return box.clickedButton() == go;
     };
+    prompts.confirmImport = [this](const QString &t, const QString &m) {
+        return QMessageBox::question(this, t, m, QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Ok) == QMessageBox::Ok;
+    };
     prompts.error = [this](const QString &m) { QMessageBox::warning(this, QStringLiteral("VoyagerCalc"), m); };
     prompts.notice = [this](const QString &m) { QMessageBox::information(this, QStringLiteral("Note"), m); };
     prompts.openFile = [this](const QString &kind, const QString &filter) {
@@ -328,6 +332,10 @@ void MainWindow::buildMenus() {
     actSaveNotes_ = act(fileMenu_, QStringLiteral("Save Program Notes…"), [this] { saveNotes(); });
     actPdf_ = act(fileMenu_, QStringLiteral("Export Program Documentation (PDF)…"), [this] { exportPdf(); }, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_E));
     actText_ = act(fileMenu_, QStringLiteral("Export Listing as Text…"), [this] { exportText(); });
+    fileMenu_->addSeparator();
+    actImportPrg_ = act(fileMenu_, QStringLiteral("Import Program (.15c)…"), [this] { importManzProgram(); });
+    actExportPrg_ = act(fileMenu_, QStringLiteral("Export Program (.15c)…"), [this] { exportManzProgram(); });
+    fileMenu_->addSeparator();
     QMenu *paperMenu = fileMenu_->addMenu(QStringLiteral("PDF Paper Size"));
     auto *pg = new QActionGroup(this);
     actA4_ = paperMenu->addAction(QStringLiteral("A4"), this, [this] { setPaper(Paper::A4); });
@@ -427,6 +435,12 @@ void MainWindow::updateMenus() {
     actInspector_->setChecked(showInspector_ && hasInspector());
     const bool is15 = run && hasMemoryFiles() && hasInspector() && (snap_.model ? snap_.model : calc_->modelId()) == 15 && !switching_;
     actMatrix_->setEnabled(is15);
+    for (QAction *a : {actImportPrg_, actExportPrg_}) {
+        a->setEnabled(is15 && !importingProgram_);
+        a->setToolTip(run && !isStock() && (snap_.model ? snap_.model : calc_->modelId()) != 15
+                          ? QStringLiteral("Program files (.15c) are for the HP-15C: switch the model to the 15C to import or export them")
+                          : QStringLiteral("HP-15C programs in the format of Torsten Manz's HP-15C Simulator"));
+    }
     if (matrixEditor_ && matrixEditor_->property("vcAvailable").toBool() != is15) {
         matrixEditor_->setProperty("vcAvailable", is15);
         matrixEditor_->setAvailable(is15);
@@ -945,6 +959,7 @@ void MainWindow::findSidecar(const QString &memoryPath) {
 
 void MainWindow::memoryLoaded() {
     if (!memoryFileCandidate_.isEmpty()) { memoryFileName_ = memoryFileCandidate_; exportNames_.forgetAll(); }
+    importedManz_.reset();
     memoryFileCandidate_.clear();
     lastProgramKeys_.clear();
     if (pendingSidecar_) { doc_ = pendingSidecar_->first; notesPath_ = pendingSidecar_->second; storeNotes(); }
@@ -968,6 +983,7 @@ QString MainWindow::memorySaveEnding() const {
 // author, description and the label / register / flag notes, the sidecar link, the stored copy and the remembered memory file name.
 void MainWindow::clearAllNotes(bool forgetStored) {
     doc_ = ProgramDocument(); notesPath_.clear(); pendingSidecar_.reset(); memoryFileCandidate_.clear(); memoryFileName_.clear();
+    importedManz_.reset();
     lastProgramKeys_.clear(); exportNames_.forgetAll();
     if (forgetStored) NotesStore::forget(fw_.id);
     if (inspector_) inspector_->setComments({});
@@ -1313,6 +1329,90 @@ void MainWindow::showAbout() {
     col->addWidget(bb);
     if (aboutHook) { aboutHook(l->text()); return; }
     d.exec();
+}
+
+
+// ---- 0.7.2: HP-15C Simulator program files (.15c) ---------------------------------------------------------------------
+
+static const char *kNot15C = "Program files from the HP-15C Simulator are for the HP-15C. Switch the model to the 15C first.";
+
+void MainWindow::importManzProgram() {
+    if (!running_ || !hasInspector() || !hasMemoryFiles()) return stockUnavailable(QStringLiteral("Importing a program file"));
+    if ((snap_.model ? snap_.model : calc_->modelId()) != 15) return showError(QString::fromUtf8(kNot15C));
+    if (importingProgram_) return;
+    const QString p = prompts.openFile(QStringLiteral("Import HP-15C Program"), QStringLiteral("HP-15C Simulator programs (*.15c *.15C *.txt);;All files (*)"));
+    if (!p.isEmpty()) importManzFile(p);
+}
+
+void MainWindow::importManzFile(const QString &path) {
+    const QString name = QFileInfo(path).fileName();
+    if (!running_ || importingProgram_) return;
+    if ((snap_.model ? snap_.model : calc_->modelId()) != 15) return showError(QString::fromUtf8(kNot15C));
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) return showError(QStringLiteral("“%1” cannot be read: %2").arg(name, f.errorString()));
+    Manz15CProgram::ReadError err;
+    auto program = Manz15CProgram::read(f.readAll(), &err);
+    if (!program) return showError(QStringLiteral("“%1” cannot be imported. ").arg(name) + err.message());
+    if (program->steps.empty()) return showError(QStringLiteral("“%1” has no program steps.").arg(name));
+    const QString t = program->title.isEmpty() ? QString() : QStringLiteral(" (%1)").arg(program->title);
+    if (prompts.confirmImport && !prompts.confirmImport(QStringLiteral("Import “%1”?").arg(name),
+            QStringLiteral("The program%1 has %2 steps. It replaces the program in the calculator and its notes; registers, matrices and settings are kept. "
+                           "The steps are keyed in as on the calculator, which can take a little while.").arg(t).arg(program->steps.size())))
+        return;
+    importingProgram_ = true;
+    updateMenus();
+    setBusy(QStringLiteral("Importing %1…").arg(name), 0);
+    auto report = std::make_shared<ProgramEntryReport>();
+    auto prog = std::make_shared<Manz15CProgram>(*program);
+    worker_->submit(this, [report, prog](Machine &m) { *report = enterProgram15(m, prog->steps); }, [this, report, prog, name](const QString &e) {
+        importingProgram_ = false;
+        setBusy(QString());
+        updateMenus();
+        if (!e.isEmpty()) return showError(QStringLiteral("“%1” was not imported. ").arg(name) + e);
+        ProgramDocument doc;
+        prog->apply(doc);
+        if (doc.title.isEmpty()) doc.title = QFileInfo(name).completeBaseName();
+        doc_ = doc; notesPath_.clear(); pendingSidecar_.reset(); memoryFileName_.clear(); memoryFileCandidate_.clear();
+        lastProgramKeys_.clear(); exportNames_.forgetAll();
+        importedManz_ = *prog;
+        storeNotes();
+        saveStateNow(true);
+        inspector_->setComments({});
+        if (report->mismatches.empty()) return showNotice(QStringLiteral("Imported “%1”: %2 steps.").arg(name).arg(report->steps));
+        QStringList list;
+        for (size_t i = 0; i < report->mismatches.size() && i < 5; ++i) {
+            auto &mm = report->mismatches[i];
+            list << QStringLiteral("%1 {%2} → {%3}").arg(mm.step, 3, 10, QLatin1Char('0')).arg(mm.file, mm.calculator);
+        }
+        const int n = int(report->mismatches.size());
+        showError(QStringLiteral("“%1” was keyed in, but %2 step%3 in the calculator differ from the file: ").arg(name).arg(n).arg(n == 1 ? "" : "s")
+                  + list.join(QStringLiteral("; ")) + (n > 5 ? QStringLiteral("; …") : QString()) + QStringLiteral(". Please check the program."));
+    });
+}
+
+void MainWindow::exportManzProgram() {
+    if (!running_ || !hasInspector() || !hasMemoryFiles()) return stockUnavailable(QStringLiteral("Exporting a program file"));
+    if ((snap_.model ? snap_.model : calc_->modelId()) != 15) return showError(QString::fromUtf8(kNot15C));
+    fetchProgram([this](std::shared_ptr<const InspectorSnapshot> s) {
+        if (!s) return;
+        if (s->model != 15) return showError(QString::fromUtf8(kNot15C));
+        Manz15CProgram p;
+        p.title = doc_.title.isEmpty() ? (memoryFileName_.isEmpty() ? QString() : QFileInfo(memoryFileName_).completeBaseName()) : doc_.title;
+        p.description = doc_.description;
+        p.labelNotes = Manz15CProgram::notes(doc_, importedManz_ ? importedManz_->labelNotes : std::vector<ManzNote>{});
+        std::vector<QString> keys;
+        if (s->hasProgram) for (auto &l : s->program) keys.push_back(l.keys);
+        Manz15CProgram::ReadError err;
+        auto steps = Manz15CProgram::stepsFromListing(keys, importedManz_ ? &importedManz_->steps : nullptr, &err);
+        if (!steps) return showError(QStringLiteral("The program cannot be written as a .15c file: ") + err.message());
+        p.steps = *steps;
+        if (p.steps.empty()) return showError(QStringLiteral("There is no program in the calculator to export."));
+        QString base = p.title.isEmpty() ? QStringLiteral("Program") : p.title;
+        for (QChar c : QStringLiteral("/\\:*?\"<>|")) base.replace(c, QLatin1Char('-'));
+        const int n = int(p.steps.size());
+        saveDataAs(QStringLiteral("manz15c"), base, QStringLiteral("HP-15C Simulator program (*.15c);;All files (*)"), p.fileData(), QStringLiteral("15c"),
+                   [this, n](const QString &path) { showNotice(QStringLiteral("Exported %1 steps to “%2”.").arg(n).arg(QFileInfo(path).fileName())); });
+    });
 }
 
 }  // namespace vc

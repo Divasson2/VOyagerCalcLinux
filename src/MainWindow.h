@@ -11,6 +11,7 @@
 #include "ProgramDocument.h"
 #include "Stores.h"
 #include "MatrixEditor.h"
+#include "Manz15C.h"
 #include "usb/CalculatorLink.h"
 #include "usb/HidTransport.h"
 #include <QMainWindow>
@@ -69,7 +70,8 @@ public:
         std::function<QString(const QString &fileKind, const QString &filter)> openFile;
         std::function<QString(const QString &suggestedName, const QString &filter)> saveFile;
         std::function<bool(const QString &)> askFixPermissions;       // offered with the "no access" message
-        std::function<void(MatrixEditor::Hooks &)> matrixHooks;       // tests: replace the clipboard / paste preview of the Matrix Editor
+        std::function<void(MatrixEditor::Hooks &)> matrixHooks;
+        std::function<bool(const QString &title, const QString &message)> confirmImport;   // File ▸ Import Program (.15c)…: true = import       // tests: replace the clipboard / paste preview of the Matrix Editor
     };
     Prompts prompts;
 
@@ -160,6 +162,13 @@ public:
     bool keyClick() const { return keyClick_; }
     void openMatrixEditor();                          // Calculator ▸ Matrix Editor… (15C)
     MatrixEditor *matrixEditor() const { return matrixEditor_; }
+    // 0.7.2: Torsten Manz HP-15C Simulator program files (15C only)
+    void importManzProgram();                         // File ▸ Import Program (.15c)…
+    void importManzFile(const QString &path);
+    void exportManzProgram();                         // File ▸ Export Program (.15c)…
+    bool isImportingProgram() const { return importingProgram_; }
+    QAction *importProgramAction() const { return actImportPrg_; }
+    QAction *exportProgramAction() const { return actExportPrg_; }
     void setPaper(Paper p);
     void editComment(int step);
 
@@ -214,7 +223,7 @@ private:
     InspectorPanel *inspector_;
     QLabel *busy_;
     QMenu *fileMenu_ = nullptr, *calcMenu_ = nullptr, *modelMenu_ = nullptr, *keysMenu_ = nullptr, *usbMenu_ = nullptr;
-    QAction *actOpen_, *actSave_, *actInfo_, *actOpenNotes_, *actSaveNotes_, *actPdf_, *actText_, *actClear_, *actInspector_, *actKeyHelp_, *actLegend_ = nullptr, *actClick_ = nullptr, *actMatrix_ = nullptr,
+    QAction *actOpen_, *actSave_, *actInfo_, *actOpenNotes_, *actSaveNotes_, *actPdf_, *actText_, *actClear_, *actInspector_, *actKeyHelp_, *actLegend_ = nullptr, *actClick_ = nullptr, *actMatrix_ = nullptr, *actImportPrg_ = nullptr, *actExportPrg_ = nullptr,
             *actPower_, *actReset_, *actRead_, *actWrite_, *actSaveCalc_, *actFix_, *actA4_, *actLetter_, *actRelease_;
     QActionGroup *modelGroup_ = nullptr;
 
@@ -243,6 +252,8 @@ private:
     Paper paper_ = Paper::A4;
     bool showInspector_ = false, keyClick_ = false;
     QPointer<MatrixEditor> matrixEditor_;
+    bool importingProgram_ = false;
+    std::optional<Manz15CProgram> importedManz_;     // the last imported file (keeps USER "u" markers and unknown notes for the export)
     bool restorePending_ = true;                      // the restored window has not met its first layout yet
     bool savedHadInspector_ = false;                  // the saved window size already included the flyout
     int inspectorWidth_ = 340;                        // the flyout's own width, remembered separately
