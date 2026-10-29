@@ -145,6 +145,6 @@ inline const KeySpec kKeys16C[39] = {
 };
 inline const LegendBracket kBrackets16C[] = { {"SHOW", 12, 15}, {"CLEAR", 22, 24} };
 
-inline const double kGZoneFraction12C = 0.365, kGZoneFraction15C = 0.364, kGZoneFraction16C = 0.352;
+inline const double kGZoneFraction12C = 0.365, kGZoneFraction15C = 0.29, kGZoneFraction16C = 0.30;  // faces-v3 (2026-10-29): blue legend band measured on the new photos
 
 }  // namespace vc

@@ -17,4 +17,7 @@ Fonts included in the program (used in the documentation PDF):
   Seven-segment display font (HP15CSimulatorDisplay): HP15C Simulator Font (c) 2005 Torsten Manz, Freeware.
   The font files are renamed copies (name table only) that keep their copyright notices.
 
+Calculator face pictures:
+  HP-15C and HP-16C calculator photographs by Warren Young.
+
 VoyagerCalc is not affiliated with, endorsed by or sponsored by HP Inc. No HP firmware is included.

@@ -4,7 +4,7 @@
 # VoyagerCalc for Linux: Qt 6 front end around the C emulator core in core/.
 # Build:  cmake -S . -B build -G Ninja [-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64] && cmake --build build
 cmake_minimum_required(VERSION 3.21)
-project(VoyagerCalc VERSION 0.7.2 LANGUAGES C CXX)
+project(VoyagerCalc VERSION 0.7.3 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)

@@ -521,7 +521,14 @@ void InspectorPanel::rebuild() {
             rows.push_back(r);
         };
         header(s->model == 12 ? QStringLiteral("Stack and financial registers") : QStringLiteral("Stack"));
-        for (auto &v : s->stack) regRow(v, s->imaginaryOf(v.name), s->descriptorText(v));
+        {
+            // Shown top-to-bottom the way users think of the stack: I, LAST X, T, Z, Y, X, then any others (12C financial registers).
+            static const QStringList top = {QStringLiteral("I"), QStringLiteral("LAST X"), QStringLiteral("T"), QStringLiteral("Z"), QStringLiteral("Y"), QStringLiteral("X")};
+            std::vector<const RegisterValue *> ordered;
+            for (const QString &n : top) for (auto &v : s->stack) if (v.name == n) ordered.push_back(&v);
+            for (auto &v : s->stack) if (!top.contains(v.name)) ordered.push_back(&v);
+            for (const RegisterValue *v : ordered) regRow(*v, s->imaginaryOf(v->name), s->descriptorText(*v));
+        }
         if (s->pool) {
             header(QStringLiteral("Memory"));
             Row pr; pr.kind = RowKind::Pool; pr.pool = std::make_shared<Pool15>(*s->pool); rows.push_back(pr);

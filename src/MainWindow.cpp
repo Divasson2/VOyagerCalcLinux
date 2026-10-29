@@ -67,7 +67,7 @@ static const QString kStockLimits = QStringLiteral(
 
 static const QString kFontCredit = QStringLiteral(
     "Documentation PDF fonts, included with the app: key-cap font by Eric Rechlin; seven-segment display font by Torsten Manz "
-    "(HP15C Simulator Font © 2005 Torsten Manz, Freeware). The font files are renamed copies (name table only) that keep their copyright notices.");
+    "(HP15C Simulator Font © 2005 Torsten Manz, Freeware). The font files are renamed copies (name table only) that keep their copyright notices. HP-15C and HP-16C calculator photographs by Warren Young.");
 
 // ---- pending action texts (AppModel.PendingAction) ---------------------------------------------------------------
 
@@ -438,7 +438,7 @@ void MainWindow::updateMenus() {
     for (QAction *a : {actImportPrg_, actExportPrg_}) {
         a->setEnabled(is15 && !importingProgram_);
         a->setToolTip(run && !isStock() && (snap_.model ? snap_.model : calc_->modelId()) != 15
-                          ? QStringLiteral("Program files (.15c) are for the HP-15C: switch the model to the 15C to import or export them")
+                          ? QStringLiteral("HP-15C only")
                           : QStringLiteral("HP-15C programs in the format of Torsten Manz's HP-15C Simulator"));
     }
     if (matrixEditor_ && matrixEditor_->property("vcAvailable").toBool() != is15) {

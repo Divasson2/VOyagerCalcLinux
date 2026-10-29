@@ -193,7 +193,7 @@ private slots:
             QCOMPARE(mod.id(), id);
             QCOMPARE(mod.keyCount(), 39);
             QVERIFY(mod.key(Machine::keyON)); QVERIFY(mod.key(Machine::keyENTER));
-            QVERIFY(mod.gZoneFraction() > 0.3 && mod.gZoneFraction() < 0.4);
+            QVERIFY(mod.gZoneFraction() > 0.25 && mod.gZoneFraction() < 0.4);
         }
         QCOMPARE(Model::hp15c().fileExtension(), QString("bin15c"));
         // the ENTER shortcut: Return
