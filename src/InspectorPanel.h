@@ -51,9 +51,17 @@ public:
     QRect pinnedHeaderRect(Pane which) const;
     QString pinnedHeaderText(Pane which) const;
     QListView *listView(Pane which) const;
+    /// The context menu's items for a register row / program line (tests): titles, "-" for a separator, disabled ones in [ ].
+    QStringList registerMenuTexts(const QString &name) const;
+    QStringList programMenuTexts(int step) const;
+    /// Trigger a context-menu item by title as if chosen (tests); false when it is not there or disabled.
+    bool triggerRegisterItem(const QString &name, const QString &title);
+    bool triggerProgramItem(int step, const QString &title);
 
 signals:
     void editComment(int step);
+    /// A context-menu item (GTO nnn, RCL / STO / x≷ …): the keys to press on the calculator.
+    void performKeys(const QList<int> &keys);
 
 private:
     void rebuild();

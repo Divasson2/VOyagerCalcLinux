@@ -448,6 +448,59 @@ private slots:
         QVERIFY(errors.last().contains("No calculator found"));
         QVERIFY(!w->linkBusy());
     }
+    void calculatorBackWindowFollowsTheModel() {
+        QByteArray fw = vct::firmwareMulti(); VC_REQUIRE(fw, "multi");
+        auto w = window(fw);
+        QVERIFY(w->backAction()); QCOMPARE(w->backAction()->text(), QString("Show Calculator Back"));
+        QCOMPARE(w->backAction()->shortcut(), QKeySequence(Qt::CTRL | Qt::Key_B));
+        if (w->snapshot().model != 12) { answer = 1; w->chooseModel(120); }                // the remembered model may be another one
+        QVERIFY(waitFor([&] { return !w->isSwitching() && w->snapshot().model == 12; }));
+        QVERIFY(!w->backAction()->isEnabled());                 // 12C: no back picture
+        answer = 1; w->chooseModel(152);
+        QVERIFY(waitFor([&] { return !w->isSwitching() && w->snapshot().model == 15; }));
+        QVERIFY(w->backAction()->isEnabled());
+        w->backAction()->trigger();
+        QVERIFY(w->backWindow() && w->backWindow()->isVisible());
+        QCOMPARE(w->backWindow()->windowTitle(), QString("HP-15C Back")); QCOMPARE(w->backWindow()->model(), 15);
+        w->backWindow()->resize(500, 300); QTest::qWait(50); QCOMPARE(w->backWindow()->size(), QSize(500, 300));   // resizable
+        answer = 1; w->chooseModel(160);
+        QVERIFY(waitFor([&] { return !w->isSwitching() && w->snapshot().model == 16; }));
+        QCOMPARE(w->backWindow()->windowTitle(), QString("HP-16C Back")); QVERIFY(w->backWindow()->isVisible());
+        answer = 1; w->chooseModel(120);
+        QVERIFY(waitFor([&] { return !w->isSwitching() && w->snapshot().model == 12; }));
+        QVERIFY(!w->backWindow()->isVisible()); QVERIFY(!w->backAction()->isEnabled());
+        QVERIFY(!QPixmap(BackWindow::resourceFor(15)).isNull()); QVERIFY(!QPixmap(BackWindow::resourceFor(16)).isNull());
+    }
+    void inspectorGtoAndRegisterMenus() {
+        QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
+        auto w = window(fw);
+        w->setShowInspector(true);
+        type(*w, "g R/S 1 2 3 4 5 g R/S");                       // a 5-line program, back to run mode
+        QVERIFY(waitFor([&] { return w->inspector()->snapshot() && w->inspector()->snapshot()->lines == 5 && !w->inspector()->snapshot()->programMode && !w->inspector()->snapshot()->running; }));
+        QCOMPARE(w->inspector()->programMenuTexts(3), QStringList{"GTO 003"});
+        QVERIFY(w->inspector()->triggerProgramItem(3, "GTO 003"));                 // run mode: moves the pointer
+        QVERIFY(waitFor([&] { return w->inspector()->snapshot()->line == 3; }));
+        type(*w, "g R/S");
+        QVERIFY(waitFor([&] { return w->inspector()->snapshot()->programMode && !w->inspector()->snapshot()->running; }));
+        QVERIFY(w->inspector()->triggerProgramItem(1, "GTO 001"));                 // program mode: the display shows the line
+        QVERIFY(waitFor([&] { return w->inspector()->snapshot()->line == 1 && shownText(*w).contains("001"); }));
+        QCOMPARE(w->inspector()->snapshot()->lines, 5);                          // nothing keyed in
+        // program mode: a register item keys the instruction into the program, as the keys would
+        QVERIFY(w->inspector()->triggerRegisterItem("R2", "STO R2"));
+        QVERIFY(waitFor([&] { return w->inspector()->snapshot()->lines == 6 && w->inspector()->snapshot()->line == 2; }));
+        type(*w, "g R/S");
+        QVERIFY(waitFor([&] { return !w->inspector()->snapshot()->programMode; }));
+        type(*w, "9");
+        QVERIFY(waitFor([&] { return !w->inspector()->snapshot()->running; }));
+        const QStringList menu = w->inspector()->registerMenuTexts("R2");
+        QCOMPARE(menu, (QStringList{"RCL R2", "STO R2", "-", "STO+ R2", "STO− R2", "STO× R2", "STO÷ R2", "-", "RCL+ R2", "RCL− R2", "RCL× R2", "RCL÷ R2", "-", "x≷ R2"}));
+        QVERIFY(w->inspector()->registerMenuTexts("LAST X").first().startsWith("["));
+        QVERIFY(w->inspector()->triggerRegisterItem("R2", "STO R2"));
+        QVERIFY(waitFor([&] { for (auto &r : w->inspector()->snapshot()->registers) if (r.name == "R2") return r.text.contains("9"); return false; }));
+        QVERIFY(w->inspector()->triggerRegisterItem("R2", "RCL× R2"));
+        QVERIFY(waitFor([&] { return shownText(*w).contains("81.0000"); }));
+        QVERIFY(errors.isEmpty());
+    }
     void aboutHasCredits() {
         QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");
         auto w = window(fw);
@@ -456,6 +509,7 @@ private slots:
         w->showAbout();
         QVERIFY(text.contains("Eric Rechlin")); QVERIFY(text.contains("Torsten Manz")); QVERIFY(text.contains("MIT"));
         QVERIFY(text.contains("Not affiliated"));
+        QVERIFY(text.contains("(front and back) by Warren Young"));
     }
     void menusExist() {
         QByteArray fw = vct::firmware15(); VC_REQUIRE(fw, "15C");

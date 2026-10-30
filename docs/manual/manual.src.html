@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>VoyagerCalc 0.7.4 User Manual</title>
+<link rel="stylesheet" href="manual.css">
+</head>
+<body>
+
+<!-- ============ COVER ============ -->
+<section class="cover">
+  <div class="cover-top">
+    <div class="brand">The Calculator Store · thecalculatorstore.com</div>
+    <h1>VoyagerCalc</h1>
+    <div class="subtitle">User Manual · Version 0.7.4</div>
+    <div class="tagline">Desktop emulator for the HP-16C CE and HP-15C CE Voyager calculators<br>(and the HP-12C CE) — runs the firmware of your own calculator</div>
+  </div>
+  <img class="cover-img" src="img/voyagercalc-16c-web.jpg" alt="VoyagerCalc running the HP-16C">
+  <div class="cover-platforms">
+    <span>macOS</span><span>Windows 10/11 x64 · arm64</span><span>Linux x86_64 · arm64</span>
+  </div>
+  <div class="cover-foot">
+    Free software, MIT licence · Test release, October 2026<br>
+    Calculator photographs (front and back) by Warren Young<br>
+    <span class="small">Not affiliated with, endorsed by or sponsored by HP Inc. “HP” and the calculator model names belong to their owners.</span>
+  </div>
+</section>
+
+<!-- ============ TOC ============ -->
+<section class="toc">
+  <h2 class="notoc">Contents</h2>
+  <ul id="toc"></ul>
+</section>
+
+<!-- ============ 1 INTRO ============ -->
+<h1 id="intro">1. Introduction</h1>
+<p><b>VoyagerCalc</b> is a free desktop application, published by The Calculator Store, that puts an HP Voyager calculator on your computer screen. It does not imitate the calculator with its own maths: it <b>emulates the ARM chip</b> inside the HP Collector’s Edition (CE) calculators and runs the <b>firmware file of your own calculator</b> on it. The calculator on screen therefore behaves exactly as that firmware does.</p>
+<p>Version 0.7.4 supports the <b>HP-16C CE</b> (computer scientist / programmer’s calculator) and the <b>HP-15C CE</b> (scientific calculator), and also the <b>HP-12C CE</b> (financial calculator), which this manual mentions only where it behaves differently.</p>
+
+<h3>What you can do with it</h3>
+<ul>
+  <li>Use a full-size photographic calculator face with a live display, with the <b>mouse</b> or the <b>computer keyboard</b>.</li>
+  <li>Watch the <b>stack, storage registers, memory, matrices and program</b> live in the <i>Registers &amp; Program</i> panel (register inspector).</li>
+  <li>Edit HP-15C matrices A–E in a spreadsheet-style <b>Matrix Editor</b>, and paste from or copy to Excel, LibreOffice Calc or Google Sheets.</li>
+  <li><b>Save and open calculator memory files</b> (2048-byte memory images), and keep the calculator’s memory automatically between launches.</li>
+  <li><b>Import and export HP-15C programs</b> in the <code>.15c</code> format of Torsten Manz’s HP-15C Simulator.</li>
+  <li>Document a program (title, description, label, register and flag notes, per-step comments) and <b>export it as a PDF</b> or as a text listing.</li>
+  <li><b>Read and write the memory of your real calculator over USB</b>, with an automatic backup and a read-back check.</li>
+</ul>
+
+<div class="note"><b>No firmware is included.</b> Neither the app nor the source code contains HP firmware. You supply the firmware <code>.bin</code> file of your own calculator (about 112 KB). See <a href="#firmware">chapter 11</a> for where to get it. Using firmware is at your own responsibility.</div>
+
+<div class="warn"><b>Test release.</b> 0.7.4 is labelled a test release. USB reading and writing with a real calculator works in the author’s tests on Linux and on Windows 11 ARM (with a real HP-15C). The <b>Windows x64 build is untested on real hardware</b> (it passes the test suites and has been run only under emulation / wine). Please report problems on the GitHub project.</div>
+
+<h3>What is new in 0.7.4</h3>
+<ul>
+  <li><b>View ▸ Show Calculator Back</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>⌘</kbd><kbd>B</kbd>): a separate, resizable window with a photograph of the back of the HP-15C or HP-16C (see <a href="#back">“The calculator’s back”</a>).</li>
+  <li><b>GTO from the program listing:</b> right-click a program line ▸ <i>GTO nnn</i> moves the program pointer there.</li>
+  <li><b>Register commands from the inspector:</b> right-click a storage register for RCL, STO, STO+ − × ÷, RCL+ − × ÷ and x≷, keyed exactly as on the calculator (see <a href="#regmenu">“Register context menu”</a>).</li>
+  <li><b>New HP-15C and HP-16C face photos</b> (sharper, same key areas) and new photos of the backs. Calculator photographs (front and back) by Warren Young.</li>
+  <li>The user manual is now included in every download (DMG, zips, Windows installer and Linux tarballs).</li>
+</ul>
+<h3>What was new in 0.7.3</h3>
+<ul>
+  <li><b>Register inspector:</b> the stack is now listed I, LAST X, T, Z, Y, X from top to bottom.</li>
+  <li><b>New HP-15C and HP-16C face photos</b> with a grey blank display and re-measured key areas. Calculator photographs by Warren Young.</li>
+  <li><b>File menu cleanup:</b> program import/export (<code>.15c</code>) is available only for the HP-15C; on the 12C and 16C the items are disabled (“HP-15C only”).</li>
+  <li>The macOS app is distributed from the same GitHub release, Developer ID signed, notarized and stapled.</li>
+</ul>
+<p class="small">Earlier changes, briefly: 0.7.2 added <code>.15c</code> program import/export and a new 16C face; 0.7.1 added the Matrix Editor, Paste/Copy Matrix, <i>Click f/g Labels</i>, <i>Key Click Sound</i>, real-time-only speed (Turbo mode removed; program speed now matches a real 15C CE) and 16C memory-file layout checks; 0.7.0 was the first Linux and Windows release with the inspector, PDF documentation export, memory files and the USB link.</p>
+
+<h3>About this manual</h3>
+<p>This manual describes VoyagerCalc 0.7.4 as found in its README, installation guides and source code for the 0.7.4 release (draft, October 2026). Menu names are given as <span class="menu">Menu ▸ Item</span>. Shortcuts are written for Windows/Linux as <kbd>Ctrl</kbd>; on macOS use <kbd>⌘</kbd> instead. Operating the calculators themselves (RPN, programming, matrix and integer functions) is covered by HP’s owner’s handbooks for the HP-15C and HP-16C and is not repeated here.</p>
+
+<!-- ============ 2 REQUIREMENTS ============ -->
+<h1 id="req">2. System requirements</h1>
+<table class="grid">
+<thead><tr><th>Platform</th><th>Requirement</th><th>Download</th></tr></thead>
+<tbody>
+<tr><td><b>macOS</b></td><td>macOS 14 (Sonoma) or newer.<span class="fn">From the app’s deployment target (macOS 14.0) in the source.</span></td><td><code>VoyagerCalc-0.7.4-macOS.dmg</code> or <code>…-macOS.zip</code></td></tr>
+<tr><td><b>Windows</b></td><td>Windows 10 or 11, 64-bit. <b>x64</b> build for Intel/AMD PCs (also runs on Windows on ARM, more slowly, through emulation); <b>arm64</b> build for Windows on ARM (for example Windows 11 in Parallels on an Apple Silicon Mac). No administrator rights needed.</td><td><code>VoyagerCalc-0.7.4-windows-x64-setup.exe</code> / <code>…-x64.zip</code><br><code>VoyagerCalc-0.7.4-windows-arm64-setup.exe</code> / <code>…-arm64.zip</code></td></tr>
+<tr><td><b>Linux</b></td><td>64-bit desktop, <b>Debian 13 / Ubuntu 24.04 or newer</b>, x86_64 (Intel/AMD) or arm64. Qt 6.8 is bundled: no other software has to be installed.</td><td><code>VoyagerCalc-0.7.4-linux-x86_64.tar.gz</code><br><code>VoyagerCalc-0.7.4-linux-arm64.tar.gz</code></td></tr>
+</tbody></table>
+<p><b>Also needed:</b></p>
+<ul>
+  <li>The <b>firmware file</b> (<code>.bin</code>, about 112 KB) for your calculator: official HP firmware or one of the test / extended firmware builds (see <a href="#firmware">chapter 11</a>).</li>
+  <li><i>Optional:</i> your real HP-12C/15C/16C CE and a USB cable, to transfer memory between the calculator and the app. On Windows no driver is needed (the standard Windows HID driver is used); on Linux the installer adds a small udev rule.</li>
+</ul>
+<p>All downloads are attached to the GitHub release <b>v0.7.4</b>:<br><a href="https://github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4">github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4</a></p>
+
+<!-- ============ 3 INSTALL ============ -->
+<h1 id="install">3. Installation</h1>
+
+<h2 id="verify">3.1 Verify the download (SHA256SUMS)</h2>
+<p>Each release includes a file <code>SHA256SUMS</code> that lists the SHA-256 checksum of every file. Download it into the same folder as your package and check that the checksums match before installing.</p>
+<table class="grid">
+<thead><tr><th>System</th><th>Command (run in the download folder)</th></tr></thead>
+<tbody>
+<tr><td>Linux</td><td><code>sha256sum -c --ignore-missing SHA256SUMS</code><br>Expected output: <code>VoyagerCalc-0.7.4-linux-x86_64.tar.gz: OK</code></td></tr>
+<tr><td>macOS (Terminal)</td><td><code>shasum -a 256 -c --ignore-missing SHA256SUMS</code><br>or <code>shasum -a 256 VoyagerCalc-0.7.4-macOS.dmg</code> and compare by eye</td></tr>
+<tr><td>Windows (PowerShell)</td><td><code>Get-FileHash .\VoyagerCalc-0.7.4-windows-x64-setup.exe -Algorithm SHA256</code><br>then compare the hash (case does not matter) with the line in <code>SHA256SUMS</code></td></tr>
+</tbody></table>
+<p>The checksums of each release are published in its <code>SHA256SUMS</code> file (see <a href="#appendix-sums">Appendix A</a>). If a checksum does not match, delete the file and download it again.</p>
+
+<h2 id="install-mac">3.2 macOS</h2>
+<ol>
+  <li>Download <code>VoyagerCalc-0.7.4-macOS.dmg</code> (or the <code>.zip</code>) from the release page.</li>
+  <li>Open the <code>.dmg</code> and drag <b>VoyagerCalc</b> into your <b>Applications</b> folder (from the <code>.zip</code>: double-click to unpack, then move the app to Applications).</li>
+  <li>Start VoyagerCalc from Applications or Launchpad.</li>
+</ol>
+<p>The Mac app is <b>Developer ID signed, notarized and stapled</b>, so Gatekeeper should open it without warnings. It runs in the macOS App Sandbox with access to files you choose, to USB (for the calculator link) and to the folder <code>~/Documents/VoyagerCalc Backups/</code>.</p>
+
+<h2 id="install-win">3.3 Windows</h2>
+<p><b>Choose the build:</b> <b>arm64</b> for a Windows-on-ARM computer, <b>x64</b> for an Intel/AMD PC.</p>
+<h3>Option A – installer (easiest)</h3>
+<ol>
+  <li>Double-click <code>VoyagerCalc-0.7.4-windows-x64-setup.exe</code> (or <code>…-arm64-setup.exe</code>).</li>
+  <li>It installs <b>for your user only</b> and needs <b>no administrator rights</b>. The program goes to <code>%LOCALAPPDATA%\Programs\VoyagerCalc</code>.</li>
+  <li>The installer adds a Start menu folder <b>VoyagerCalc</b> with <i>VoyagerCalc</i>, <i>VoyagerCalc USB Test</i> and <i>Uninstall VoyagerCalc</i>.</li>
+</ol>
+<h3>Option B – portable zip (no installation)</h3>
+<ol>
+  <li>Right-click <code>VoyagerCalc-0.7.4-windows-x64.zip</code> (or <code>…-arm64.zip</code>) and choose <b>Extract All…</b>.</li>
+  <li>Open the extracted folder and double-click <code>VoyagerCalc.exe</code>.</li>
+</ol>
+<p>The Windows programs and installers are code-signed with Azure Artifact Signing. If SmartScreen still shows a warning, see <a href="#ts-win">Troubleshooting</a>.</p>
+
+<h2 id="install-linux">3.4 Linux</h2>
+<ol>
+  <li><b>Download</b> the tarball for your computer: <code>VoyagerCalc-0.7.4-linux-x86_64.tar.gz</code> (Intel/AMD) or <code>…-linux-arm64.tar.gz</code> (ARM).</li>
+  <li><b>Unpack</b> it (right-click ▸ Extract, or <code>tar xzf VoyagerCalc-0.7.4-linux-*.tar.gz</code>).</li>
+  <li>In the new folder, run <code>./install.sh</code> as your <b>normal user</b> (not with <code>sudo</code>; it asks for the password itself when needed).
+    <ul>
+      <li>It checks that the package matches your CPU (x86_64 or arm64) and that the program can start on your system.</li>
+      <li>It installs <b>for your user only</b> into <code>~/.local/opt/VoyagerCalc</code>, adds a command link <code>~/.local/bin/voyagercalc</code>, an icon and an entry in the applications menu. An older installation is replaced; your firmware and files are kept.</li>
+    </ul>
+  </li>
+  <li><b>USB password step.</b> To allow USB access to the calculator, the installer adds the udev rule <code>/etc/udev/rules.d/99-voyagercalc.rules</code>. This needs administrator rights once: a password window opens, or it asks in the terminal (your password if you may use sudo, otherwise the root password). If neither works it prints one line to paste into a terminal. <b>The program is installed in every case</b>; USB access can be set up later with <span class="menu">Calculator ▸ Real Calculator (USB) ▸ Fix USB Permissions…</span> or <code>sh ~/.local/opt/VoyagerCalc/share/usb-access.sh</code>.</li>
+  <li><b>Start VoyagerCalc</b> from the applications menu (search for “VoyagerCalc”), or run <code>~/.local/opt/VoyagerCalc/bin/voyagercalc</code>.</li>
+</ol>
+<p class="small">Installer problems: run <code>./install.sh --verbose</code> and attach <code>~/.local/share/voyagercalc/install.log</code> to an issue. To build from source instead, see <code>docs/BUILD.md</code> in the repository (CMake ≥ 3.21, C11/C++17 compiler, Qt 6.4+).</p>
+
+<!-- ============ 4 FIRST LAUNCH ============ -->
+<h1 id="first">4. First launch</h1>
+<p>On first start VoyagerCalc shows a welcome screen: <i>“This app runs the firmware of your own CE calculator (12C, 15C or 16C, including multi-model builds)”</i>.</p>
+<ol>
+  <li>Click <b>Choose Firmware File…</b> and pick the <code>.bin</code> file you flash to the calculator (about 112 KB). You can also <b>drop the file onto the window</b>.</li>
+  <li>The app shows “Starting the calculator…”, boots the firmware and then shows the calculator face.</li>
+  <li>The firmware is <b>remembered</b>: next time the calculator starts straight away. To use another firmware later, choose <span class="menu">File ▸ Choose Firmware…</span>.</li>
+</ol>
+<p>The remembered firmware, the calculator’s saved state and your program notes are stored in:</p>
+<table class="grid">
+<tbody>
+<tr><td>Linux</td><td><code>~/.local/share/VoyagerCalc</code></td></tr>
+<tr><td>Windows</td><td><code>%LOCALAPPDATA%\VoyagerCalc</code></td></tr>
+<tr><td>macOS</td><td>the app’s <i>Application Support</i> folder (inside its sandbox container)</td></tr>
+</tbody></table>
+<div class="note"><b>Which firmware?</b> A file that is not between 4 KB and 4 MB is rejected with “does not look like a calculator firmware file”. With <b>HP’s original 12C firmware</b> only the keyboard and display work; the inspector, memory files, program documentation, USB memory transfer, the model switch and keeping memory between launches need the CE firmware’s memory layout and are unavailable.</div>
+
+<figure>
+  <img src="img/voyagercalc-15c-web.jpg" alt="VoyagerCalc running the HP-15C with the Registers &amp; Program panel">
+  <figcaption>VoyagerCalc running the HP-15C (15.2 mode) with the Registers &amp; Program panel open. Calculator photograph by Warren Young.</figcaption>
+</figure>
+
+<!-- ============ 5 MODEL ============ -->
+<h1 id="model">5. Choosing the HP-16C or the HP-15C</h1>
+<p>The model you get is decided by the <b>firmware file</b>: an HP-16C CE firmware starts an HP-16C, an HP-15C CE firmware an HP-15C. Choose the firmware for the calculator you want with <span class="menu">File ▸ Choose Firmware…</span> (or drop the <code>.bin</code> on the window). Switching to another firmware first saves the memory of the firmware that is running, so each firmware keeps its own memory.</p>
+<h3>Multi-model firmware: the Model menu</h3>
+<p>Some firmware builds contain several calculator images (“multi-model builds”). Then the <span class="menu">Model</span> menu lists them, for example <b>12C</b>, <b>15C</b>, <b>15C (15.2)</b> and <b>16C</b>, and you can switch between them.</p>
+<ul>
+  <li><b>Switching clears the calculator’s memory</b> (programs, registers and settings), as on the calculator. VoyagerCalc asks first and offers to save a backup.</li>
+  <li><b>15C (15.2)</b> is the HP-15C’s double-memory mode, which has more registers than the standard 15C mode.</li>
+  <li>With a single-model firmware the menu shows only that model; with HP’s original 12C firmware it says “HP’s original firmware has no model switch”.</li>
+</ul>
+<h3>On macOS</h3>
+<p>The Mac app’s <span class="menu">Calculator</span> menu also has a <b>Keyboard</b> choice (Automatic (from firmware), 16C, 15C, 12C) and a <b>Face</b> choice (Photo or Drawn).</p>
+
+<h3 id="back">The calculator’s back (View ▸ Show Calculator Back)</h3>
+<p><span class="menu">View ▸ Show Calculator Back</span> (<kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>⌘</kbd><kbd>B</kbd>) opens a <b>separate window</b> with a photograph of the back of the calculator, with its printed reference tables. Resize the window freely; the picture keeps its proportions.</p>
+<ul>
+  <li>Available for the <b>HP-15C</b> and the <b>HP-16C</b>. With the HP-12C the menu item is greyed out.</li>
+  <li>The window <b>follows the model</b>: switch from the 15C to the 16C and it shows the 16C’s back. When you switch to the 12C, the Windows and Linux apps close it; the Mac app shows “The back picture is available for the HP-15C and HP-16C.”</li>
+</ul>
+
+<figure>
+  <img src="img/voyagercalc-16c-web.jpg" alt="VoyagerCalc running the HP-16C">
+  <figcaption>The HP-16C face (HEX mode, word size 16, extended memory) with the register inspector. Calculator photograph by Warren Young.</figcaption>
+</figure>
+
+<!-- ============ 6 INPUT ============ -->
+<h1 id="input">6. Keyboard and mouse input</h1>
+<h2>6.1 Mouse</h2>
+<ul>
+  <li><b>Click a key</b> to press it; it stays down while you hold the mouse button.</li>
+  <li><b>Click f/g Labels</b> (<span class="menu">View</span> menu, on by default): clicking the <b>gold</b> label above a key presses <b>f</b> and the key together; clicking the <b>blue</b> label on a key’s front presses <b>g</b> and the key. The label lights up under the pointer. Turn the option off to make every click press the key itself.</li>
+  <li><b>Hold a key down (latch):</b> <b>right-click</b> a key (or <kbd>Ctrl</kbd>-click; on macOS <kbd>⌘</kbd>-click or right-click). Latched keys let you play combinations such as ON + another key one key at a time. <span class="menu">Keys ▸ Release Held Keys</span> lets them go.</li>
+  <li><b>Show Key Help</b> (<span class="menu">View</span> menu, off by default): when the pointer rests on a key, a tooltip shows the key’s functions and its keyboard shortcut.</li>
+  <li><b>Key Click Sound</b> (<span class="menu">View</span> menu, off by default): a soft, deep click on each key press.</li>
+  <li><b>Drag and drop</b> onto the window: a firmware <code>.bin</code>, a memory file (2048 bytes or a <code>.bin15c</code>/<code>.15c</code>-type ending) or a program-notes file (<code>.voyagerdoc</code>).</li>
+</ul>
+
+<h2>6.2 Computer keyboard</h2>
+<ul>
+  <li><b>Tap <kbd>Shift</kbd> on its own</b> = <b>f</b>. <b>Tap <kbd>Alt</kbd> on its own</b> (<kbd>Option</kbd> on a Mac) = <b>g</b>.</li>
+  <li><b><kbd>Alt</kbd> + key</b> (<kbd>Option</kbd> + key on a Mac) = <b>g</b>, then the key (its blue function).</li>
+  <li>Shift still types <kbd>*</kbd> <kbd>+</kbd> <kbd>_</kbd> <kbd>%</kbd> as usual.</li>
+  <li>Each physical key <b>holds</b> its calculator key down while held, so chords work.</li>
+  <li><kbd>Esc</kbd> is the <b>ON</b> key (<span class="menu">Calculator ▸ ON / OFF</span>).</li>
+  <li>Keys combined with <kbd>Ctrl</kbd> (<kbd>⌘</kbd>) go to the menus, not to the calculator. Typing in another window, such as the Matrix Editor, does not reach the calculator.</li>
+  <li>Letters are not case-sensitive.</li>
+</ul>
+
+<h3>HP-16C keyboard map</h3>
+<div class="keytable">{{KEYS16}}</div>
+
+<h3>HP-15C keyboard map</h3>
+<div class="keytable">{{KEYS15}}</div>
+<p class="small">On both models the f and g keys are reached with Shift and Alt as described above. On the 16C, the letter keys A–F type the hexadecimal digits. The tables come from the app’s key definitions (the same tables are used by the Mac app).</p>
+
+<h2 id="shortcuts">6.3 Menu shortcuts</h2>
+<table class="grid">
+<thead><tr><th>Action</th><th>Windows / Linux</th><th>macOS</th></tr></thead>
+<tbody>
+<tr><td>File ▸ Open Memory File…</td><td><kbd>Ctrl</kbd>+<kbd>O</kbd></td><td><kbd>⌘</kbd><kbd>O</kbd></td></tr>
+<tr><td>File ▸ Save Memory File…</td><td><kbd>Ctrl</kbd>+<kbd>S</kbd></td><td><kbd>⌘</kbd><kbd>S</kbd></td></tr>
+<tr><td>File ▸ Program Info…</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd></td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>I</kbd></td></tr>
+<tr><td>File ▸ Export Program Documentation (PDF)…</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd></td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>E</kbd></td></tr>
+<tr><td>File ▸ Quit</td><td><kbd>Ctrl</kbd>+<kbd>Q</kbd> (Linux); on Windows close the window</td><td><kbd>⌘</kbd><kbd>Q</kbd></td></tr>
+<tr><td>View ▸ Registers &amp; Program (show/hide)</td><td><kbd>Ctrl</kbd>+<kbd>I</kbd></td><td><kbd>⌘</kbd><kbd>I</kbd></td></tr>
+<tr><td>View ▸ Show Calculator Back (HP-15C, HP-16C)</td><td><kbd>Ctrl</kbd>+<kbd>B</kbd></td><td><kbd>⌘</kbd><kbd>B</kbd></td></tr>
+<tr><td>Calculator ▸ ON / OFF</td><td><kbd>Esc</kbd></td><td><kbd>Esc</kbd></td></tr>
+<tr><td>Calculator ▸ Matrix Editor… (HP-15C)</td><td><kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd></td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>M</kbd></td></tr>
+<tr><td>Edit ▸ Paste Matrix… (HP-15C)</td><td>– (button in the Matrix Editor)</td><td><kbd>⇧</kbd><kbd>⌘</kbd><kbd>V</kbd></td></tr>
+</tbody></table>
+
+<h2 id="chords">6.4 The Keys menu: ON combinations</h2>
+<p>The real calculator has functions reached by holding keys while pressing ON. The <span class="menu">Keys</span> menu performs them for you (the calculator is turned off, the keys held, ON pressed):</p>
+<table class="grid">
+<thead><tr><th>Menu item</th><th>Keys</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td>Service Menu</td><td>g-ENTER-ON</td><td>Checksum (2), model (4), speed (5), key settings (6–8). ON leaves the menu.</td></tr>
+<tr><td>USB Mode</td><td>f-ENTER-ON</td><td>On the calculator this waits for USB transfers. In the emulator the calculator just turns on.</td></tr>
+<tr><td>Memory Reset…</td><td>ON + −</td><td>Clears all programs, registers and settings (Pr Error). Asks first and offers a backup.</td></tr>
+<tr><td>Self-Test</td><td>ON + ×</td><td>Runs the self-test and shows all segments when it passes.</td></tr>
+<tr><td>Continuous Self-Test</td><td>ON + +</td><td>Repeats the self-test until you press a key.</td></tr>
+<tr><td>Keyboard Test</td><td>ON + ÷</td><td>Press every key in order, row by row; ON ends the test.</td></tr>
+<tr><td>Swap Decimal Point and Comma</td><td>ON + .</td><td>Switches the display between 1,234.56 and 1.234,56 (not on the 16C).</td></tr>
+</tbody></table>
+<p class="small">With HP’s original 12C firmware only Self-Test, Memory Reset and the decimal-point swap are listed.</p>
+
+<!-- ============ 7 INSPECTOR ============ -->
+<h1 id="inspector">7. The register inspector (Registers &amp; Program)</h1>
+<p>Open the panel with <span class="menu">View ▸ Registers &amp; Program</span> (<kbd>Ctrl</kbd>+<kbd>I</kbd> / <kbd>⌘</kbd><kbd>I</kbd>). It appears to the right of the calculator and the window grows to make room. It updates live while you use the calculator and while programs run.</p>
+<h3>Header</h3>
+<p>The top line shows the model (<i>HP-16C</i>, <i>HP-15C</i> or <i>HP-15C (15.2)</i>) with tags such as <b>ext. memory</b>, <b>Complex</b>, <b>PRGM</b> (program mode) or <b>RUNNING</b>. The second line shows the current mode (for example <code>HEX WSIZE 16 2's</code> on the 16C), the set flags (16C flags 4 and 5 are shown as <i>4(C)</i> and <i>5(G)</i>; 15C flag 8 as <i>8(C)</i>) and the program position <code>line 012 / 045</code>.</p>
+<h3>Views</h3>
+<p>Three buttons choose what is shown: <b>Both</b>, <b>Registers</b> or <b>Program</b>. The choice is remembered. The section headers stay pinned at the top while you scroll.</p>
+<h3>Stack</h3>
+<p>Listed from top to bottom as <b>I, LAST X, T, Z, Y, X</b> (since 0.7.3). On the 12C the section is “Stack and financial registers”. On the 16C, integers carry a base suffix (<i>h</i>, <i>o</i>, <i>b</i>, <i>d</i>) with the decimal value below; long binary numbers are grouped in fours. In complex mode on the 15C, a value is shown as <i>a + bi</i>.</p>
+<h3>Memory and matrices (HP-15C)</h3>
+<ul>
+  <li><b>Memory</b>: a bar of the 15C’s memory pool with the <code>g MEM</code> figures, showing how the registers are shared between storage registers, matrices and program.</li>
+  <li><b>Matrices</b>: matrices A–E with their size (for example 3×3), the number of registers and their location; the RESULT matrix is tagged. Click a matrix to expand its values (up to 6 columns shown; copy as TSV to see all).</li>
+</ul>
+<h3>Storage registers</h3>
+<p>“Storage registers (<i>n</i>)” lists every register. Tick <b>Non-zero registers only</b> to hide empty ones.</p>
+<h3>Program</h3>
+<p>“Program (<i>n</i> lines)” lists each step with its line number, key codes and mnemonic. The current line is highlighted and kept in view, also while a program runs.</p>
+<h3>Copying and comments</h3>
+<ul>
+  <li><b>Right-click a register</b>: <i>Copy &lt;value&gt;</i>, and on the 16C also <i>Copy decimal &lt;value&gt;</i>, followed by the register commands below.</li>
+  <li><b>Right-click a matrix</b>: <i>Copy Matrix X as TSV</i> (for a spreadsheet).</li>
+  <li><b>Double-click a program line</b> (or right-click ▸ <i>Add Comment…</i>/<i>Edit Comment…</i>) to attach a comment to that step. Comments appear in the listing and in the exported documentation, and stay with their step when lines are inserted or deleted. An empty comment removes it.</li>
+</ul>
+<h3 id="gto">GTO from the program listing</h3>
+<p><b>Right-click a program line ▸ <i>GTO nnn</i></b> (on the 12C <i>GTO nn</i>) moves the program pointer to that line. VoyagerCalc presses the calculator’s own keys: <code>GTO CHS nnn</code> on the 15C, <code>GTO . nnn</code> on the 16C and <code>g GTO nn</code> on the 12C (<code>g GTO . nn</code> in program mode). It works in run mode and in program mode; in program mode the display then shows that line. GTO is <b>never recorded</b> as a program step. It is greyed out while a program runs.</p>
+<h3 id="regmenu">Register context menu</h3>
+<p>Below the Copy items, a right-click on a register offers <b>RCL</b>, <b>STO</b>, <b>STO+ STO− STO× STO÷</b>, <b>RCL+ RCL− RCL× RCL÷</b> and <b>x≷</b>, each with the register’s real name, for example <i>STO− R5</i>, <i>RCL× R.3</i> or <i>x≷ I</i>. Each command is carried out by pressing the calculator’s keys exactly as you would (<i>STO+ R5</i> presses <code>STO + 5</code>; <i>x≷ R5</i> on the 15C presses <code>f x≷ 5</code>), so the result, the stack lift and LAST X are what the calculator itself does. Commands the model has no instruction for are greyed out:</p>
+<table class="grid">
+<thead><tr><th>Command</th><th>HP-15C</th><th>HP-16C</th><th>HP-12C</th></tr></thead>
+<tbody>
+<tr><td>RCL, STO</td><td>R0–R9, R.0–R.9 and I</td><td>R0–RF, R.0–R.F and I</td><td>R0–R9, R.0–R.9 and n, i, PV, PMT, FV</td></tr>
+<tr><td>STO+ − × ÷</td><td>yes (registers and I)</td><td>– (the 16C has no register arithmetic)</td><td>R0–R4 only</td></tr>
+<tr><td>RCL+ − × ÷</td><td>yes (registers and I)</td><td>–</td><td>–</td></tr>
+<tr><td>x≷</td><td>any of the registers above, and I</td><td>only <i>x≷ I</i> (on the I row)</td><td>–</td></tr>
+</tbody></table>
+<p>The commands are greyed out on the <b>X, Y, Z, T and LAST X</b> rows, on registers that the calculator reaches only through (i) (R20 and up on the 15C, R32 and up on the 16C) and while a program runs.</p>
+<div class="note"><b>In program mode</b> (PRGM) a register command is <b>keyed into the program</b> as an instruction, just as if you pressed the keys: <i>STO R2</i> inserts the step <code>STO 2</code> after the current line and stores nothing. In run mode the command is executed at once.</div>
+
+<!-- ============ 8 MATRIX EDITOR ============ -->
+<h1 id="matrix">8. HP-15C Matrix Editor</h1>
+<p>Open with <span class="menu">Calculator ▸ Matrix Editor…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>M</kbd> / <kbd>⇧</kbd><kbd>⌘</kbd><kbd>M</kbd>). It is available when the calculator runs as an HP-15C (including 15.2 mode).</p>
+<ol>
+  <li>Choose a matrix (<b>Matrix A</b>–<b>E</b>) and its size (<b>Rows × Columns</b>). A <b>memory bar</b> shows what fits: “<i>r × c = n registers; matrix X can have up to m here</i>”. A size that does not fit is shown in red.</li>
+  <li>Fill in the spreadsheet-style grid: <kbd>Tab</kbd> moves right, <kbd>Enter</kbd> moves down. Numbers can be typed as <code>1,5</code>, <code>1.5</code> or <code>2E-3</code>. Invalid cells are marked red.</li>
+  <li>Click <b>Apply</b> to put the matrix into the calculator’s memory. It is then ready to compute with on the calculator, is kept across restarts, and can be sent to your real calculator with <span class="menu">Real Calculator (USB) ▸ Write to Calculator…</span>. Setting 0 × 0 frees the matrix’s registers.</li>
+</ol>
+<h3>Other buttons</h3>
+<ul>
+  <li><b>Reload from Memory</b> (Mac: <i>Open from Memory</i>): shows the selected matrix as it is in memory now.</li>
+  <li><b>Paste Matrix</b>: copy a range in Excel, LibreOffice Calc or Google Sheets, then paste. The size is set automatically and a preview is shown first (with warnings for ragged rows, cells that are not numbers, or a size that does not fit); <b>Fill the Grid</b> accepts it.</li>
+  <li><b>Copy as TSV</b> (Mac: <i>Copy</i>): copies the grid tab-separated for a spreadsheet, with the calculator’s own digits. Values survive the round trip exactly.</li>
+</ul>
+
+<!-- ============ 9 FILES ============ -->
+<h1 id="files">9. Saving and loading state</h1>
+<h2>9.1 Automatic continuous memory</h2>
+<p>Like the real calculator, VoyagerCalc keeps its memory: when you quit, the calculator’s state is saved, and the next launch continues where you left off. The state is stored per firmware in the data folder (see <a href="#first">chapter 4</a>). <span class="menu">Calculator ▸ Reset Calculator (clears memory)…</span> restarts the calculator without the saved memory and also clears the program notes.</p>
+
+<h2>9.2 Memory files</h2>
+<ul>
+  <li><span class="menu">File ▸ Save Memory File…</span> (<kbd>Ctrl</kbd>+<kbd>S</kbd>) saves the whole calculator memory (programs, registers and settings), a 2048-byte image. The default endings are <code>.bin12c</code>, <code>.bin15c</code> and <code>.bin16c</code>, but you can type any ending.</li>
+  <li><span class="menu">File ▸ Open Memory File…</span> (<kbd>Ctrl</kbd>+<kbd>O</kbd>) loads one. The file is checked by its <b>content</b>, not its ending; the older endings <code>.12c</code>, <code>.15c</code>, <code>.16c</code> and <code>.12cmem</code> still open.</li>
+  <li>Before loading, VoyagerCalc test-loads the memory and asks for confirmation (you can save a backup of the current memory first). If the memory belongs to another model or mode, it says so — for example that it needs the 15C (15.2) double-memory mode, or that it fits another model in the Model menu.</li>
+  <li><b>HP-16C memory files</b> are checked for their layout before loading: standard memory, extended memory (B7B7 / E8E8) and the early E3E3 layout, which is converted automatically. A file for a different layout gives a warning instead of loading wrong values.</li>
+</ul>
+
+<h2>9.3 Program notes and documentation</h2>
+<ul>
+  <li><span class="menu">File ▸ Program Info…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>I</kbd>): title, author, model, number of steps, a <b>description</b> (a line starting with <code>##</code> is a heading, <code>-</code> a bullet), and the program’s <b>labels</b> (where defined, where called from), <b>registers</b> and <b>flags</b>, each with a field for your notes. Buttons: <i>Save Notes…</i>, <i>Export PDF…</i>, <i>Done</i>.</li>
+  <li><span class="menu">File ▸ Save Program Notes…</span> / <span class="menu">Open Program Notes…</span>: notes are saved as a <code>.voyagerdoc</code> file (JSON, the same format on Mac, Windows and Linux). A notes file saved next to a memory file (for example <code>FinancePac.15c.voyagerdoc</code>) is found automatically when that memory file is opened. <span class="menu">Clear Program Notes</span> clears them.</li>
+  <li><span class="menu">File ▸ Export Program Documentation (PDF)…</span> (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>): a PDF with a cover (model, firmware, steps, description), labels, registers and flags, matrices, and the listing (step, display, keys — with key-cap symbols on the 15C — and comments). Paper size: <span class="menu">File ▸ PDF Paper Size ▸ A4 / US Letter</span>.</li>
+  <li><span class="menu">File ▸ Export Listing as Text…</span>: the same as a plain-text file.</li>
+</ul>
+
+<h2>9.4 HP-15C program files (.15c)</h2>
+<ul>
+  <li>Both items are available only for the HP-15C; on the 12C and 16C they are greyed out (“HP-15C only”).</li>
+  <li><span class="menu">File ▸ Import Program (.15c)…</span> reads a program in the file format of <b>Torsten Manz’s HP-15C Simulator</b>, keys it into the emulated calculator and checks the result. It replaces the program and its notes; registers, matrices and settings are kept. If the program does not fit, memory is left unchanged.</li>
+  <li><span class="menu">File ▸ Export Program (.15c)…</span> writes a file the simulator opens directly.</li>
+  <li>These items are for the <b>HP-15C only</b>; on the 12C and 16C they are disabled.</li>
+</ul>
+
+<h2 id="usb">9.5 Transferring memory with your real calculator (USB)</h2>
+<ol>
+  <li>Connect the calculator by USB, <b>turn it off</b>, hold <b>f</b> and <b>ENTER</b>, press <b>ON</b> (the display stays blank: USB mode).</li>
+  <li>Use <span class="menu">Calculator ▸ Real Calculator (USB)</span>:
+    <ul>
+      <li><b>Read from Calculator</b> – loads the calculator’s memory into the emulator.</li>
+      <li><b>Write to Calculator…</b> – first backs up the calculator’s current memory to <code>Documents/VoyagerCalc Backups</code> (for example <code>HP-15C calculator 2026-10-16 08.12.33.bin15c</code>), asks for confirmation, writes the emulator’s memory, reads it back and compares. Then press ON on the calculator to leave USB mode and ON again to use it.</li>
+      <li><b>Save Calculator Memory to File…</b> – saves the calculator’s memory to a file without changing the emulator.</li>
+      <li><b>Fix USB Permissions…</b> (Linux only) – installs the udev rule if it is missing.</li>
+    </ul>
+  </li>
+</ol>
+<div class="warn">If the calculator holds a different model’s memory than the emulator runs, writing will most likely make the calculator show <b>Pr Error</b> and clear its memory — VoyagerCalc warns you. A memory that uses the 15C (15.2) double memory needs the calculator to be set to 15C (15.2) mode first (turn it off, hold g and ENTER, press ON, 4, then the key under 15.2), otherwise it shows Error 10.</div>
+<p>In a virtual machine, connect the calculator’s USB device to the guest system (in Parallels: <i>Devices ▸ USB &amp; Bluetooth</i>), not to the host.</p>
+
+<!-- ============ 10 MENUS ============ -->
+<h1 id="menus">10. Menu reference</h1>
+<table class="grid menus">
+<thead><tr><th>Menu</th><th>Items (Windows / Linux; the Mac app has the same functions)</th></tr></thead>
+<tbody>
+<tr><td><b>File</b></td><td>Open Memory File… · Save Memory File… · Program Info… · Open Program Notes… · Save Program Notes… · Export Program Documentation (PDF)… · Export Listing as Text… · Import Program (.15c)… · Export Program (.15c)… · PDF Paper Size (A4 / US Letter) · Clear Program Notes · Choose Firmware… · Quit</td></tr>
+<tr><td><b>View</b></td><td>Registers &amp; Program · Show Key Help · Show Calculator Back · Click f/g Labels · Key Click Sound</td></tr>
+<tr><td><b>Calculator</b></td><td>ON / OFF (Esc) · Reset Calculator (clears memory)… · Matrix Editor… · Real Calculator (USB) ▸ Read from Calculator / Write to Calculator… / Save Calculator Memory to File… / Fix USB Permissions… (Linux)<br><i>Mac also:</i> Keyboard, Face, Log USB Traffic, Show USB Log in Finder</td></tr>
+<tr><td><b>Model</b></td><td>The calculator images in the firmware (12C, 15C, 15C (15.2), 16C)</td></tr>
+<tr><td><b>Keys</b></td><td>Service Menu · USB Mode · Memory Reset… · Self-Test · Continuous Self-Test · Keyboard Test · Swap Decimal Point and Comma · Release Held Keys</td></tr>
+<tr><td><b>Help</b></td><td>Show USB Log · About VoyagerCalc (version, firmware name and checksum, licences and credits). On the Mac, About is in the VoyagerCalc application menu.</td></tr>
+</tbody></table>
+<p class="small">Command-line options (Linux, and <code>VoyagerCalc-cli.exe</code> on Windows): <code>--version</code>, <code>--usb-selftest</code>, <code>--print-udev-rule</code> (Linux).</p>
+
+<!-- ============ 11 FIRMWARE ============ -->
+<h1 id="firmware">11. Firmware and the real HP-15C CE / HP-16C CE</h1>
+<p>The HP Collector’s Edition calculators contain an ARM Cortex-M4 microcontroller. Its firmware imitates HP’s original “Nut” processor, which runs the original calculator program. VoyagerCalc’s emulator core (plain C11, no third-party or HP code) imitates <b>the ARM chip</b>: it executes each instruction of your firmware file as the chip would. As a result:</p>
+<ul>
+  <li>The emulated calculator <b>behaves as the firmware says</b> — functions, display, flags, memory layout, and the extras of extended firmware builds (such as extended memory, menus or a stopwatch where the firmware has them).</li>
+  <li>It runs in <b>real time</b>: auto power-off, the stopwatch and the blinking display behave as on the real calculator, and program speed matches a real 15C CE (the clock-speed settings in the Service menu are scaled the same way).</li>
+  <li>Memory files are the same 2048-byte memory images the real calculator holds, so memory can move between the app and the calculator over USB.</li>
+</ul>
+<h3>Program capacity</h3>
+<p>How many program steps fit is decided by the <b>firmware and its memory mode</b>, exactly as on the calculator — the app does not add its own limit. Program files exchanged through <i>Import / Export Program (.15c)</i> hold <b>up to 999 steps</b> (steps 001–999, the HP-15C Simulator’s limit). What actually fits the HP-15C depends on its memory: in the standard 15.0 mode at most 448 one-byte steps, in the 15.2 double-memory mode more. VoyagerCalc checks this before and while it keys a program in.</p>
+<h3>Where to get firmware</h3>
+<p>The Calculator Store keeps pages with firmware downloads and links:</p>
+<ul>
+  <li>Official HP firmware: <a href="https://www.thecalculatorstore.com/c/resources-and-links/official-hp-calculator-firmware">thecalculatorstore.com/c/resources-and-links/official-hp-calculator-firmware</a></li>
+  <li>Test and extended firmware (HP-15C CE C8C8, HP-16C CE B7B7, HP-12C CE multi E6E6, …): <a href="https://www.thecalculatorstore.com/c/resources-and-links/hp-calculator-test-firmware">thecalculatorstore.com/c/resources-and-links/hp-calculator-test-firmware</a></li>
+  <li>Simulators and emulators: <a href="https://www.thecalculatorstore.com/c/resources-and-links/simulators-and-emulators">thecalculatorstore.com/c/resources-and-links/simulators-and-emulators</a></li>
+</ul>
+
+<!-- ============ 12 TROUBLESHOOTING ============ -->
+<h1 id="trouble">12. Troubleshooting</h1>
+<h2 id="ts-mac">12.1 macOS – Gatekeeper</h2>
+<p>The 0.7.4 Mac app is Developer ID signed, notarized and stapled, so macOS should open it normally. If macOS still refuses to open it:</p>
+<ul>
+  <li>Make sure you downloaded it from the official GitHub release and that its checksum matches <code>SHA256SUMS</code> (<a href="#verify">3.1</a>).</li>
+  <li>Move the app into <b>Applications</b> before opening it.</li>
+  <li>Open <b>System Settings ▸ Privacy &amp; Security</b> and click <b>Open Anyway</b> next to the VoyagerCalc message, or Control-click the app and choose <b>Open</b>.</li>
+</ul>
+<h2 id="ts-win">12.2 Windows – SmartScreen</h2>
+<p>The Windows builds are code-signed (Azure Artifact Signing), so Windows should not show an “unknown publisher” warning. If SmartScreen shows <b>“Windows protected your PC”</b>, click <b>More info</b>, then <b>Run anyway</b>.</p>
+<p>On a Windows-on-ARM computer, use the arm64 build; the x64 build also runs there, but more slowly.</p>
+<h2 id="ts-linux">12.3 Linux – dependencies and installer</h2>
+<ul>
+  <li>VoyagerCalc bundles Qt 6.8 and needs a <b>64-bit Debian 13 / Ubuntu 24.04 or newer</b>. If <code>install.sh</code> says “VoyagerCalc cannot start on this system”, your system is too old (it prints the reason); please tell the author which system you have.</li>
+  <li>“This package is for arm64 computers, and this computer is x86_64” (or the reverse): download the other tarball.</li>
+  <li>“Please run this as your normal user (without sudo)”: run <code>./install.sh</code> without sudo.</li>
+  <li>“Please unpack the whole .tar.gz first”: extract the complete archive and run the script from inside the extracted folder.</li>
+  <li>If VoyagerCalc does not appear in the menu, start it with <code>~/.local/opt/VoyagerCalc/bin/voyagercalc</code>. For a detailed log run <code>./install.sh --verbose</code> and look at <code>~/.local/share/voyagercalc/install.log</code>.</li>
+</ul>
+<h2>12.4 USB connection problems</h2>
+<ul>
+  <li><b>No access (Linux):</b> choose <span class="menu">Calculator ▸ Real Calculator (USB) ▸ Fix USB Permissions…</span>. If no password window can open, VoyagerCalc shows one line to paste into a terminal. Then unplug and replug the calculator and put it in USB mode again.</li>
+  <li><b>Linux self-test:</b> run <code>voyagercalc --usb-selftest</code> in a terminal. It lists USB devices, says whether the calculator is there, whether you may use it and whether another program holds it, and tries the read in several ways (a step that never returns is shown as STUCK).</li>
+  <li><b>Windows self-test:</b> with the calculator in USB mode, double-click <b>VoyagerCalc USB Test.bat</b> (Start menu or program folder); the result is saved as <code>VoyagerCalc-USB-Test.txt</code> on your Desktop.</li>
+  <li><b>USB log:</b> <span class="menu">Help ▸ Show USB Log</span> shows every USB step, with Copy, Save… and Clear (Linux file: <code>~/.local/share/VoyagerCalc/usb.log</code>). On the Mac: <span class="menu">Calculator ▸ Log USB Traffic</span> and <span class="menu">Show USB Log in Finder</span>.</li>
+  <li>Attach the self-test output or log to an issue on GitHub.</li>
+</ul>
+<h2>12.5 Other messages</h2>
+<ul>
+  <li><b>“Choose a firmware file first”</b>: no firmware is loaded yet; choose your <code>.bin</code>.</li>
+  <li><b>Menu items greyed out</b>: many items need a running calculator; Matrix Editor and <code>.15c</code> import/export need the HP-15C; Show Calculator Back needs the HP-15C or HP-16C; in the inspector, register commands the model lacks are greyed out; with HP’s original 12C firmware the inspector, memory files and USB memory transfer are unavailable.</li>
+  <li><b>A memory file “may not fit”</b>: it is probably for another model or memory mode; follow the suggestion in the message (for example switch to 15C (15.2) in the Model menu).</li>
+</ul>
+
+<!-- ============ 13 UNINSTALL ============ -->
+<h1 id="uninstall">13. Uninstalling</h1>
+<table class="grid">
+<thead><tr><th>System</th><th>How to remove</th><th>Your data (kept)</th></tr></thead>
+<tbody>
+<tr><td>Windows (installer)</td><td><b>Settings ▸ Apps ▸ VoyagerCalc ▸ Uninstall</b>, or Start menu ▸ VoyagerCalc ▸ Uninstall VoyagerCalc</td><td rowspan="2"><code>%LOCALAPPDATA%\VoyagerCalc</code></td></tr>
+<tr><td>Windows (zip)</td><td>Delete the extracted folder</td></tr>
+<tr><td>Linux</td><td>Run <code>~/.local/opt/VoyagerCalc/uninstall.sh</code>. It removes the program, menu entry, icon and command link, and offers to remove the USB udev rule (a password window may open; leaving the rule is harmless — or remove it with <code>sudo rm /etc/udev/rules.d/99-voyagercalc.rules</code>).</td><td><code>~/.local/share/VoyagerCalc</code></td></tr>
+<tr><td>macOS</td><td>Quit VoyagerCalc and move it from Applications to the Trash.</td><td>The app’s sandbox container under <code>~/Library/Containers/</code></td></tr>
+</tbody></table>
+<p>Your firmware, saved calculator state and notes stay in the data folder after uninstalling; delete that folder too if you want them gone. Backups made by <i>Write to Calculator</i> are in <code>Documents/VoyagerCalc Backups</code>.</p>
+
+<!-- ============ 14 LICENCE ============ -->
+<h1 id="licence">14. Licence and credits</h1>
+<p>VoyagerCalc is free software under the <b>MIT License</b>. Copyright © 2026 José González Divassón (repository: Divasson2).</p>
+<div class="licence">
+<p>Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the “Software”), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:</p>
+<p>The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.</p>
+<p>THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.</p>
+</div>
+<h3>Credits and third-party components</h3>
+<ul>
+  <li><b>HP-15C and HP-16C calculator photographs (front and back) by Warren Young.</b></li>
+  <li>Key-cap font by Eric Rechlin; seven-segment display font by Torsten Manz (HP15C Simulator Font © 2005 Torsten Manz, Freeware). Both are embedded in the exported program PDFs.</li>
+  <li>The <code>.15c</code> program format is that of Torsten Manz’s HP-15C Simulator.</li>
+  <li>The Linux and Windows apps use the Qt toolkit under the LGPL v3 (included as shared libraries).</li>
+  <li>No HP firmware is included. VoyagerCalc is not affiliated with, endorsed by or sponsored by HP Inc.; model numbers are used only to say which firmware the app works with.</li>
+</ul>
+
+<!-- ============ 15 LINKS ============ -->
+<h1 id="links">15. Links</h1>
+<h3>The Calculator Store</h3>
+<ul>
+  <li>Shop home: <a href="https://www.thecalculatorstore.com/">www.thecalculatorstore.com</a></li>
+  <li>VoyagerCalc for Mac: <a href="https://www.thecalculatorstore.com/c/resources-and-links/voyagercalc-for-mac">thecalculatorstore.com/c/resources-and-links/voyagercalc-for-mac</a></li>
+  <li>VoyagerCalc for Linux and Windows: <a href="https://www.thecalculatorstore.com/c/resources-and-links/voyagercalc-for-linux-and-windows">thecalculatorstore.com/c/resources-and-links/voyagercalc-for-linux-and-windows</a></li>
+  <li>HP-16C CE: <a href="https://www.thecalculatorstore.com/c/hp16c-ce">thecalculatorstore.com/c/hp16c-ce</a> · All calculators: <a href="https://www.thecalculatorstore.com/c/calculators">thecalculatorstore.com/c/calculators</a></li>
+  <li>Resources &amp; Links: <a href="https://www.thecalculatorstore.com/c/resources-and-links">thecalculatorstore.com/c/resources-and-links</a></li>
+  <li>Firmware pages: see <a href="#firmware">chapter 11</a>.</li>
+</ul>
+<h3>Project</h3>
+<ul>
+  <li>Linux / Windows source and all releases: <a href="https://github.com/Divasson2/VOyagerCalcLinux">github.com/Divasson2/VOyagerCalcLinux</a></li>
+  <li>Release 0.7.4: <a href="https://github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4">github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4</a></li>
+  <li>Mac app source: <a href="https://github.com/Divasson2/VoyagerCalc">github.com/Divasson2/VoyagerCalc</a></li>
+  <li>Report a problem: GitHub issues on the project page (attach the USB self-test output or USB log for USB problems).</li>
+</ul>
+
+<!-- ============ APPENDIX ============ -->
+<h1 id="appendix-sums">Appendix A. SHA-256 checksums of release 0.7.4</h1>
+<p>Every release comes with a <code>SHA256SUMS</code> file on its release page, which lists the checksum of each download. Always use the <code>SHA256SUMS</code> file downloaded from the release page.</p>
+<table class="sums">
+{{SUMS}}
+</table>
+
+</body>
+</html>

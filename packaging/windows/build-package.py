@@ -19,7 +19,7 @@ ap.add_argument('--mingw-bin', required=True)
 ap.add_argument('--objdump', required=True)
 ap.add_argument('--out', required=True)
 ap.add_argument('--tag', default='')
-ap.add_argument('--version', default='0.7.3')
+ap.add_argument('--version', default='0.7.4')
 ap.add_argument('--makensis', default='')
 ap.add_argument('--nsisdir', default='')
 ap.add_argument('--no-staging', action='store_true', help='do not make the unsigned staging package for sign-windows.ps1')
@@ -67,6 +67,10 @@ print('bundled DLLs:', ' '.join(sorted(os.path.basename(v) for v in need.values(
 
 for src, dst in [('LICENSE', 'LICENSE.txt'), ('packaging/windows/README-windows.txt', 'README.txt'), ('packaging/windows/INSTALL-windows.md', 'INSTALL.md')]:
     put(os.path.join(ROOT, src), dst)
+# the user manual (build it with docs/manual/build.py); in the zip and, through the staging dir, the installer
+_guide = os.path.join(ROOT, 'docs', 'VoyagerCalc-User-Manual.pdf')
+if not os.path.isfile(_guide): sys.exit('missing docs/VoyagerCalc-User-Manual.pdf: run docs/manual/build.py first')
+put(_guide, 'VoyagerCalc User Manual.pdf')
 shutil.copy2(os.path.join(HERE, 'VoyagerCalc USB Test.bat'), os.path.join(root, 'VoyagerCalc USB Test.bat'))
 # the tests' qt.conf: nothing needed, plugins sit in platforms\ and styles\ next to the exe
 

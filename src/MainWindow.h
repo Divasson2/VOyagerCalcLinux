@@ -11,6 +11,7 @@
 #include "ProgramDocument.h"
 #include "Stores.h"
 #include "MatrixEditor.h"
+#include "BackWindow.h"
 #include "Manz15C.h"
 #include "usb/CalculatorLink.h"
 #include "usb/HidTransport.h"
@@ -33,6 +34,7 @@ namespace vc {
 
 class CalculatorWidget;
 class InspectorPanel;
+
 class WelcomeWidget;
 
 /// Something that clears the calculator's memory, waiting for the user's confirmation.
@@ -94,6 +96,12 @@ public:
     EngineWorker *worker() const { return worker_; }
     CalculatorWidget *calculator() const { return calc_; }
     InspectorPanel *inspector() const { return inspector_; }
+    /// View ▸ Show Calculator Back and its window (nullptr until first shown); for tests.
+    QAction *backAction() const { return actBack_; }
+    BackWindow *backWindow() const { return backWindow_; }
+    void showCalculatorBack();
+    /// Key `keys` on the calculator (the inspector's context menus), then refresh the display and the inspector.
+    void performKeys(const std::vector<int> &keys);
     bool hasInspector() const { return fw_.capabilities & VC_CAP_INSPECT; }
     bool hasMemoryFiles() const { return fw_.capabilities & VC_CAP_MEMORY; }
     const ProgramDocument &programDoc() const { return doc_; }
@@ -223,7 +231,7 @@ private:
     InspectorPanel *inspector_;
     QLabel *busy_;
     QMenu *fileMenu_ = nullptr, *calcMenu_ = nullptr, *modelMenu_ = nullptr, *keysMenu_ = nullptr, *usbMenu_ = nullptr;
-    QAction *actOpen_, *actSave_, *actInfo_, *actOpenNotes_, *actSaveNotes_, *actPdf_, *actText_, *actClear_, *actInspector_, *actKeyHelp_, *actLegend_ = nullptr, *actClick_ = nullptr, *actMatrix_ = nullptr, *actImportPrg_ = nullptr, *actExportPrg_ = nullptr,
+    QAction *actOpen_, *actSave_, *actInfo_, *actOpenNotes_, *actSaveNotes_, *actPdf_, *actText_, *actClear_, *actInspector_, *actKeyHelp_, *actBack_ = nullptr, *actLegend_ = nullptr, *actClick_ = nullptr, *actMatrix_ = nullptr, *actImportPrg_ = nullptr, *actExportPrg_ = nullptr,
             *actPower_, *actReset_, *actRead_, *actWrite_, *actSaveCalc_, *actFix_, *actA4_, *actLetter_, *actRelease_;
     QActionGroup *modelGroup_ = nullptr;
 
@@ -252,6 +260,8 @@ private:
     Paper paper_ = Paper::A4;
     bool showInspector_ = false, keyClick_ = false;
     QPointer<MatrixEditor> matrixEditor_;
+    QPointer<BackWindow> backWindow_;
+    int currentModel() const;
     bool importingProgram_ = false;
     std::optional<Manz15CProgram> importedManz_;     // the last imported file (keeps USER "u" markers and unknown notes for the export)
     bool restorePending_ = true;                      // the restored window has not met its first layout yet

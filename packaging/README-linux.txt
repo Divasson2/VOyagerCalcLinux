@@ -5,6 +5,8 @@ A calculator app for the HP 12C, 15C and 16C Collector's Edition (CE) calculator
 firmware you supply on your computer, shows the calculator on screen, and can move the calculator's memory
 between the app and your real calculator over USB.
 
+The user manual is "VoyagerCalc User Manual.pdf" in this folder.
+
 Install (about one minute)
 --------------------------
 1. Unpack this .tar.gz (right-click > Extract, or:  tar xzf VoyagerCalc-*.tar.gz).

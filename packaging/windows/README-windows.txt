@@ -2,6 +2,7 @@ VoyagerCalc for Windows (test build)
 ====================================
 A Windows front end for the HP-12C, HP-15C and HP-16C emulator, with USB to your real calculator.
 Not affiliated with Hewlett-Packard. MIT licence (see LICENSE.txt).
+User manual: "VoyagerCalc User Manual.pdf" (also in the Start menu when installed).
 
 Start: double-click VoyagerCalc.exe. The first time, choose your firmware file (a .bin you already have; it is not included). It is remembered.
 

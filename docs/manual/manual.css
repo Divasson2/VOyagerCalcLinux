@@ -1,0 +1,59 @@
+@page { size: A4; margin: 22mm 20mm 22mm 20mm;
+  @top-left { content: "VoyagerCalc 0.7.4 · User Manual"; font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
+  @top-right { content: string(chapter); font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
+  @bottom-left { content: "The Calculator Store · thecalculatorstore.com"; font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
+  @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
+}
+@page cover { margin: 0; @top-left{content:none} @top-right{content:none} @bottom-left{content:none} @bottom-right{content:none} }
+@page toc { @top-right{content:none} }
+html { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; font-size: 9.6pt; line-height: 1.45; color: #222; }
+a { color: #a5560f; text-decoration: none; }
+h1 { string-set: chapter content(); font-size: 19pt; color: #1d2a3a; border-bottom: 3px solid #d98a22; padding-bottom: 4pt; margin: 0 0 10pt; page-break-before: always; }
+h2 { font-size: 13pt; color: #1d2a3a; margin: 16pt 0 6pt; }
+h3 { font-size: 10.8pt; color: #a5560f; margin: 12pt 0 4pt; }
+h2, h3 { page-break-after: avoid; }
+p, li { orphans: 2; widows: 2; }
+code { font-family: "DejaVu Sans Mono", monospace; font-size: 8.4pt; background: #f3f0ea; padding: 0 2pt; border-radius: 2pt; }
+kbd { font-family: "DejaVu Sans", sans-serif; font-size: 8pt; border: 1px solid #aaa; border-bottom-width: 2px; border-radius: 3px; padding: 0 3pt; background: #fafafa; white-space: nowrap; }
+.menu { font-weight: bold; color: #1d2a3a; }
+.small { font-size: 8.4pt; color: #555; }
+.note, .warn { border-left: 4px solid #3b7dd8; background: #eef4fc; padding: 6pt 9pt; margin: 9pt 0; page-break-inside: avoid; }
+.warn { border-left-color: #d98a22; background: #fdf3e5; }
+table { border-collapse: collapse; width: 100%; margin: 6pt 0 10pt; }
+table.grid th, table.grid td { border: 1px solid #d5d0c6; padding: 3.5pt 5pt; vertical-align: top; text-align: left; }
+table.grid th { background: #1d2a3a; color: #fff; font-weight: bold; }
+table.grid tr:nth-child(even) td { background: #faf8f4; }
+.fn { display: block; font-size: 7.6pt; color: #777; }
+.keytable { columns: 1; }
+table.keys { font-size: 8.4pt; }
+table.keys th { background: #1d2a3a; color: #fff; padding: 2.5pt 5pt; text-align: left; }
+table.keys td { border-bottom: 1px solid #e3ded4; padding: 2pt 5pt; }
+table.keys td:nth-child(2) { color: #b57400; }
+table.keys td:nth-child(3) { color: #2d6fb6; }
+table.keys tr { page-break-inside: avoid; }
+table.sums td { font-family: "DejaVu Sans Mono", monospace; font-size: 7.2pt; border-bottom: 1px solid #e3ded4; padding: 2.5pt 4pt; word-break: break-all; }
+table.sums td:first-child { white-space: nowrap; } table.sums td:last-child { word-break: normal; white-space: nowrap; }
+figure { margin: 12pt 0; text-align: center; page-break-inside: avoid; }
+figure img { width: 100%; border: 1px solid #ccc; }
+figcaption { font-size: 8.2pt; color: #555; margin-top: 4pt; }
+.licence { font-size: 8.2pt; color: #444; border: 1px solid #ddd; padding: 4pt 10pt; background: #fbfbfb; }
+/* cover */
+.cover { page: cover; height: 297mm; background: linear-gradient(#1d2a3a, #0e151e); color: #fff; padding: 26mm 18mm 0; box-sizing: border-box; position: relative; }
+.cover .brand { color: #e7a33e; font-size: 10pt; letter-spacing: 1pt; text-transform: uppercase; }
+.cover h1 { string-set: none; border: none; color: #fff; font-size: 46pt; margin: 8pt 0 0; page-break-before: avoid; padding: 0; }
+.cover .subtitle { font-size: 17pt; color: #e7a33e; margin-top: 2pt; }
+.cover .tagline { font-size: 11.5pt; color: #d6dbe2; margin: 12pt 0 18pt; line-height: 1.5; }
+.cover-img { width: 100%; border-radius: 4pt; box-shadow: 0 0 0 1px #444; }
+.cover-platforms { margin-top: 14pt; }
+.cover-platforms span { display: inline-block; border: 1px solid #e7a33e; color: #fff; border-radius: 10pt; padding: 2pt 9pt; margin: 0 5pt 5pt 0; font-size: 9.5pt; }
+.cover-foot { position: absolute; bottom: 18mm; left: 18mm; right: 18mm; font-size: 9pt; color: #c3cad3; line-height: 1.6; }
+.cover-foot .small { color: #8d97a4; font-size: 7.8pt; }
+/* toc */
+.toc { page: toc; }
+.toc h2 { font-size: 19pt; color: #1d2a3a; border-bottom: 3px solid #d98a22; padding-bottom: 4pt; margin-top: 0; }
+#toc { list-style: none; padding: 0; }
+#toc li { margin: 3pt 0; }
+#toc li.l1 { font-weight: bold; margin-top: 8pt; }
+#toc li.l2 { padding-left: 16pt; font-size: 9pt; }
+#toc a { color: #222; }
+#toc a::after { content: leader('.') target-counter(attr(href), page); color: #666; font-weight: normal; }

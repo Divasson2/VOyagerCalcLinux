@@ -31,3 +31,10 @@ Core only (C): `make -C core` builds the library, the `vcore` command line tool 
 ## Release tarball
 Build with `-DVC_PORTABLE_RPATH=ON`, then run `packaging/build-tarball.py` (see its header for the options). The script
 refuses to put any `.bin` file into the package.
+
+## User manual
+
+The user manual's source is `docs/manual/` (`manual.src.html`, `manual.css`, the key tables and `img/`). After changing it,
+run `docs/manual/build.py` (needs `pip install weasyprint`; put the release's `SHA256SUMS` next to it to fill Appendix A)
+to rebuild `docs/VoyagerCalc-User-Manual.pdf`. The packaging scripts put that PDF, as "VoyagerCalc User Manual.pdf", in
+the Linux tarballs, the Windows zips and the installer (with a Start-menu shortcut); they stop with an error if it is missing.

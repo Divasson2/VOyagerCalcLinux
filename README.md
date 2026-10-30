@@ -13,7 +13,7 @@ over USB (`hidraw` on Linux, the standard Windows HID driver on Windows).
 * Licence: [MIT](LICENSE). Not affiliated with, endorsed by or sponsored by HP Inc.; "HP" and the calculator model names
   belong to their owners.
 
-> Status: version 0.7.3, a test release. Reading and writing the calculator's memory over USB works with a real calculator on both
+> Status: version 0.7.4, a test release. Reading and writing the calculator's memory over USB works with a real calculator on both
 > platforms in the author's tests: Linux, and Windows (tested on Windows 11 ARM with a real HP-15C). The Windows x64 build has been tested
 > under wine only, with a fake HID device. Reports from other systems and calculators are welcome.
 
@@ -68,7 +68,7 @@ firmware files. `tests/fixtures/` holds small 2 KB calculator memory images used
 ## Credits
 
 Key-cap font by Eric Rechlin, seven-segment display font by Torsten Manz (see `assets/fonts/README.md`).
-HP-15C and HP-16C calculator photographs by Warren Young.
+HP-15C and HP-16C calculator photographs (front and back) by Warren Young.
 Qt is used under the LGPL v3.
 
 Copyright (c) 2026 Divasson2. MIT licence.

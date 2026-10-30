@@ -5,8 +5,8 @@
 #include <winver.h>
 1 ICON "voyagercalc.ico"
 VS_VERSION_INFO VERSIONINFO
- FILEVERSION 0,7,3,0
- PRODUCTVERSION 0,7,3,0
+ FILEVERSION 0,7,4,0
+ PRODUCTVERSION 0,7,4,0
  FILEFLAGSMASK 0x3fL
  FILEFLAGS 0x0L
  FILEOS VOS_NT_WINDOWS32
@@ -19,12 +19,12 @@ BEGIN
     BEGIN
       VALUE "CompanyName", "José González Divassón"
       VALUE "FileDescription", "VoyagerCalc - HP Voyager calculator emulator"
-      VALUE "FileVersion", "0.7.3"
+      VALUE "FileVersion", "0.7.4"
       VALUE "InternalName", "voyagercalc"
       VALUE "LegalCopyright", "Copyright (c) 2026 José González Divassón, MIT License"
       VALUE "OriginalFilename", "voyagercalc.exe"
       VALUE "ProductName", "VoyagerCalc"
-      VALUE "ProductVersion", "0.7.3"
+      VALUE "ProductVersion", "0.7.4"
     END
   END
   BLOCK "VarFileInfo"

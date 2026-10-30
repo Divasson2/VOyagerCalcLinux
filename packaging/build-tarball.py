@@ -20,7 +20,7 @@ ap.add_argument('--readelf', default='readelf')
 ap.add_argument('--strip', default='strip')
 ap.add_argument('--out', required=True)
 ap.add_argument('--tag', default='')
-ap.add_argument('--version', default='0.7.3')
+ap.add_argument('--version', default='0.7.4')
 a = ap.parse_args()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -103,6 +103,10 @@ for f in ('install.sh', 'uninstall.sh'):
     shutil.copy2(os.path.join(HERE, f), os.path.join(root, f))
 for f, dst in (('README-linux.txt', 'README.txt'), ('THIRD-PARTY.txt', 'THIRD-PARTY.txt'), ('LICENSE.txt', 'LICENSE.txt')):
     shutil.copy2(os.path.join(HERE, f), os.path.join(root, dst))
+# the user manual (build it with docs/manual/build.py)
+_guide = os.path.join(LINUX, 'docs', 'VoyagerCalc-User-Manual.pdf')
+if not os.path.isfile(_guide): sys.exit('missing docs/VoyagerCalc-User-Manual.pdf: run docs/manual/build.py first')
+shutil.copy2(_guide, os.path.join(root, 'VoyagerCalc User Manual.pdf'))
 os.chmod(os.path.join(root, 'install.sh'), 0o755); os.chmod(os.path.join(root, 'uninstall.sh'), 0o755)
 
 # --- safety: no firmware, ever -------------------------------------------------------------------------------------

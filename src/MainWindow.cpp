@@ -4,6 +4,8 @@
 #include "MainWindow.h"
 #include "CalculatorWidget.h"
 #include "InspectorPanel.h"
+#include "BackWindow.h"
+#include "CalcActions.h"
 #include "KeyClick.h"
 #include "MatrixEditor.h"
 #include "ProgramEntry15.h"
@@ -67,7 +69,7 @@ static const QString kStockLimits = QStringLiteral(
 
 static const QString kFontCredit = QStringLiteral(
     "Documentation PDF fonts, included with the app: key-cap font by Eric Rechlin; seven-segment display font by Torsten Manz "
-    "(HP15C Simulator Font © 2005 Torsten Manz, Freeware). The font files are renamed copies (name table only) that keep their copyright notices. HP-15C and HP-16C calculator photographs by Warren Young.");
+    "(HP15C Simulator Font © 2005 Torsten Manz, Freeware). The font files are renamed copies (name table only) that keep their copyright notices. HP-15C and HP-16C calculator photographs (front and back) by Warren Young.");
 
 // ---- pending action texts (AppModel.PendingAction) ---------------------------------------------------------------
 
@@ -281,6 +283,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(calc_, &CalculatorWidget::legendPressed, this, &MainWindow::pressLegend);
     connect(calc_, &CalculatorWidget::latchToggled, this, &MainWindow::toggleLatch);
     connect(inspector_, &InspectorPanel::editComment, this, &MainWindow::editComment);
+    connect(inspector_, &InspectorPanel::performKeys, this, [this](const QList<int> &k) { performKeys(std::vector<int>(k.begin(), k.end())); });
     calc_->router().press = [this](int c) { press(c); };
     calc_->router().release = [this](int c) { release(c); };
     calc_->router().pressShifted = [this](int shift, int c) { pressLegend(c, shift); };
@@ -353,6 +356,8 @@ void MainWindow::buildMenus() {
     actKeyHelp_->setCheckable(true);
     actKeyHelp_->setToolTip(QStringLiteral("Show each key's functions and keyboard shortcut when the pointer rests on it"));
     actInspector_->setCheckable(true);
+    actBack_ = act(view, QStringLiteral("Show Calculator Back"), [this] { showCalculatorBack(); }, QKeySequence(Qt::CTRL | Qt::Key_B));
+    actBack_->setToolTip(QStringLiteral("The back of the HP-15C or HP-16C, with its tables, in a separate window"));
     view->addSeparator();
     actLegend_ = act(view, QStringLiteral("Click f/g Labels"), [this] { setLegendClicks(!calc_->legendClicks()); });
     actLegend_->setCheckable(true);
@@ -427,6 +432,22 @@ void MainWindow::rebuildKeysMenu() {
                                    : QStringLiteral("f-ENTER-ON: no USB in the app, the calculator just turns on"))->setEnabled(false);
 }
 
+int MainWindow::currentModel() const { return snap_.model ? snap_.model : calc_->modelId(); }
+
+void MainWindow::showCalculatorBack() {
+    const int m = currentModel();
+    if (!running_ || BackWindow::resourceFor(m).isEmpty()) return;
+    if (!backWindow_) backWindow_ = new BackWindow(this);
+    backWindow_->setModel(m);
+    backWindow_->show(); backWindow_->raise(); backWindow_->activateWindow();
+}
+
+void MainWindow::performKeys(const std::vector<int> &keys) {
+    if (!running_ || !worker_ || keys.empty()) return;
+    releaseLatchedKeys();
+    worker_->submit(this, [keys](Machine &m) { CalcActions::perform(m, keys); }, [this](const QString &err) { if (!err.isEmpty()) showNotice(err); });
+}
+
 void MainWindow::updateMenus() {
     const bool run = running_;
     actOpen_->setEnabled(run && hasMemoryFiles()); actSave_->setEnabled(run && hasMemoryFiles());
@@ -444,6 +465,13 @@ void MainWindow::updateMenus() {
     if (matrixEditor_ && matrixEditor_->property("vcAvailable").toBool() != is15) {
         matrixEditor_->setProperty("vcAvailable", is15);
         matrixEditor_->setAvailable(is15);
+    }
+    {
+        const int m = currentModel();
+        actBack_->setEnabled(run && !BackWindow::resourceFor(m).isEmpty());
+        actBack_->setToolTip(actBack_->isEnabled() ? QStringLiteral("The back of the HP-%1C, with its tables, in a separate window").arg(m)
+                                                   : QStringLiteral("HP-15C and HP-16C only"));
+        if (backWindow_) backWindow_->setModel(run ? m : 0);
     }
     actA4_->setChecked(paper_ == Paper::A4); actLetter_->setChecked(paper_ == Paper::Letter);
     actPower_->setEnabled(run); actReset_->setEnabled(run);

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 // Copyright (c) 2026 José González Divassón
 #include "InspectorPanel.h"
+#include "CalcActions.h"
 #include <QAbstractListModel>
 #include <QApplication>
 #include <QButtonGroup>
@@ -422,6 +423,14 @@ InspectorPanel::InspectorPanel(QWidget *parent) : QWidget(parent) {
             QString copy = r.value, dec = r.sub;
             m.addAction(QStringLiteral("Copy %1").arg(copy), [copy] { QApplication::clipboard()->setText(copy); });
             if (!dec.isEmpty()) m.addAction(QStringLiteral("Copy decimal %1").arg(dec), [dec] { QApplication::clipboard()->setText(dec); });
+            if (snap_) {
+                m.addSeparator();
+                for (const CalcAction &a : CalcActions::registerMenu(*snap_, r.name)) {
+                    if (a.separatorBefore) m.addSeparator();
+                    QList<int> keys(a.keys.begin(), a.keys.end());
+                    m.addAction(a.title, this, [this, keys] { emit performKeys(keys); })->setEnabled(a.enabled);
+                }
+            }
         } else if (r.kind == RowKind::Matrix && !r.empty) {
             QString t = r.copyText;
             m.addAction(QStringLiteral("Copy Matrix %1 as TSV").arg(r.name), [t] { QApplication::clipboard()->setText(t); });
@@ -434,6 +443,12 @@ InspectorPanel::InspectorPanel(QWidget *parent) : QWidget(parent) {
         const Row &r = progModel_->rows[i.row()];
         if (r.kind != RowKind::Prog || r.step <= 0) return;
         QMenu m; int step = r.step;
+        if (snap_) {
+            CalcAction g = CalcActions::gto(*snap_, step);
+            QList<int> keys(g.keys.begin(), g.keys.end());
+            m.addAction(g.title, this, [this, keys] { emit performKeys(keys); })->setEnabled(g.enabled);
+            m.addSeparator();
+        }
         m.addAction(r.comment.isEmpty() ? QStringLiteral("Add Comment…") : QStringLiteral("Edit Comment…"), [this, step] { emit editComment(step); });
         m.exec(progView_->viewport()->mapToGlobal(pt));
     });
@@ -446,6 +461,29 @@ InspectorPanel::InspectorPanel(QWidget *parent) : QWidget(parent) {
 }
 
 InspectorPanel::~InspectorPanel() = default;
+
+QStringList InspectorPanel::registerMenuTexts(const QString &name) const {
+    QStringList l; if (!snap_) return l;
+    for (const CalcAction &a : CalcActions::registerMenu(*snap_, name)) { if (a.separatorBefore) l << QStringLiteral("-"); l << (a.enabled ? a.title : QStringLiteral("[%1]").arg(a.title)); }
+    return l;
+}
+QStringList InspectorPanel::programMenuTexts(int step) const {
+    if (!snap_) return {};
+    CalcAction g = CalcActions::gto(*snap_, step);
+    return {g.enabled ? g.title : QStringLiteral("[%1]").arg(g.title)};
+}
+bool InspectorPanel::triggerRegisterItem(const QString &name, const QString &title) {
+    if (!snap_) return false;
+    for (const CalcAction &a : CalcActions::registerMenu(*snap_, name))
+        if (a.title == title && a.enabled) { emit performKeys(QList<int>(a.keys.begin(), a.keys.end())); return true; }
+    return false;
+}
+bool InspectorPanel::triggerProgramItem(int step, const QString &title) {
+    if (!snap_) return false;
+    CalcAction g = CalcActions::gto(*snap_, step);
+    if (g.title != title || !g.enabled) return false;
+    emit performKeys(QList<int>(g.keys.begin(), g.keys.end())); return true;
+}
 
 void InspectorPanel::setEmptyText(const QString &t) { empty_->setText(t); }
 void InspectorPanel::setSnapshot(std::shared_ptr<const InspectorSnapshot> s) { snap_ = std::move(s); rebuild(); }
