@@ -74,7 +74,9 @@ public:
     void writeMatrix15(int m, int rows, int cols, const std::vector<uint64_t> &raw);
 
     static QString variantName(int v);           // "12C", "15C", "15C (15.2)", "16C"
-    static int modelMenuKey(int variant);        // key under each label of the multi-ROM model menu
+    static bool isEnhanced16C152(const std::vector<int> &images);           // E9E9-style: 16C + 15.2 only
+    static int modelMenuKey(int variant, const std::vector<int> &images);   // key under the picker label
+    static int modelMenuKey(int variant);        // Multi / 3-ROM map (1/3/5)
 
     // trial loads of a memory image on a scratch machine (what Open / Read do before loading it)
     struct MemoryCheck {

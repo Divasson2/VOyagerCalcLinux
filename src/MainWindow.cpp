@@ -84,7 +84,9 @@ QString PendingAction::title() const {
 }
 QString PendingAction::message() const {
     switch (kind) {
-    case SwitchModel: return QStringLiteral("Switching model clears the calculator's memory (programs, registers and settings), as on the calculator. You can save a backup first.");
+    case SwitchModel: return keepsMemory
+        ? QStringLiteral("Each mode keeps its own memory (programs, registers and settings). Switching brings back the other mode's memory.")
+        : QStringLiteral("Switching model clears the calculator's memory (programs, registers and settings), as on the calculator. You can save a backup first.");
     case MemoryReset: return QStringLiteral("ON + − clears all programs, registers and settings (Pr Error). You can save a backup first.");
     case LoadMemory: return QStringLiteral("This replaces the emulator's memory (programs, registers and settings) with the one from %1. You can save a backup of the emulator's memory first.").arg(source);
     case LoadMemoryAnyway: return reason + QStringLiteral(" You can load it anyway; save a backup of the emulator's memory first if you want to keep it.");
@@ -409,7 +411,10 @@ void MainWindow::rebuildModelMenu() {
     }
     if (fw_.images.size() > 1) {
         modelMenu_->addSeparator();
-        modelMenu_->addAction(switching_ ? QStringLiteral("Switching…") : QStringLiteral("Switching clears the calculator's memory"))->setEnabled(false);
+        modelMenu_->addAction(switching_ ? QStringLiteral("Switching…")
+            : (Machine::isEnhanced16C152(fw_.images)
+               ? QStringLiteral("Each mode keeps its own memory")
+               : QStringLiteral("Switching clears the calculator's memory")))->setEnabled(false);
     }
     if (isStock()) { modelMenu_->addSeparator(); modelMenu_->addAction(QStringLiteral("HP's original firmware has no model switch"))->setEnabled(false); }
 }
@@ -806,6 +811,7 @@ void MainWindow::chooseModel(int v) {
     if (isStock()) return stockUnavailable(QStringLiteral("Switching the model"));
     if (!(fw_.images.size() > 1 && running_ && !switching_) || std::find(fw_.images.begin(), fw_.images.end(), v) == fw_.images.end()) return;
     PendingAction a; a.kind = PendingAction::SwitchModel; a.variant = v;
+    a.keepsMemory = Machine::isEnhanced16C152(fw_.images);
     int r = prompts.confirm ? prompts.confirm(a) : 0;
     if (r == 2) backupThenConfirm(a); else if (r == 1) confirm(a);
 }
@@ -844,7 +850,10 @@ void MainWindow::switchModel(int v, std::function<void()> then) {
     switching_ = true; updateMenus();
     worker_->submit(this, [v](Machine &m) { m.switchModel(v); }, [this, then](const QString &err) {
         switching_ = false;
-        if (err.isEmpty()) { clearAllNotes(true); saveStateNow(true); if (then) then(); }     // 0.6.9: the model switch cleared the memory, so the notes go too
+        if (err.isEmpty()) {
+            if (!Machine::isEnhanced16C152(fw_.images)) clearAllNotes(true);  // Multi/3-ROM: the switch cleared the memory, so the notes go too; E9E9 keeps it
+            saveStateNow(true); if (then) then();
+        }
         else showError(err);
         updateMenus();
     });

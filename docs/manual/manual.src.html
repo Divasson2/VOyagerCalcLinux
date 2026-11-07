@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>VoyagerCalc 0.7.4 User Manual</title>
+<title>VoyagerCalc 0.7.5 User Manual</title>
 <link rel="stylesheet" href="manual.css">
 </head>
 <body>
@@ -12,7 +12,7 @@
   <div class="cover-top">
     <div class="brand">The Calculator Store · thecalculatorstore.com</div>
     <h1>VoyagerCalc</h1>
-    <div class="subtitle">User Manual · Version 0.7.4</div>
+    <div class="subtitle">User Manual · Version 0.7.5</div>
     <div class="tagline">Desktop emulator for the HP-16C CE and HP-15C CE Voyager calculators<br>(and the HP-12C CE) — runs the firmware of your own calculator</div>
   </div>
   <img class="cover-img" src="img/voyagercalc-16c-web.jpg" alt="VoyagerCalc running the HP-16C">
@@ -35,7 +35,7 @@
 <!-- ============ 1 INTRO ============ -->
 <h1 id="intro">1. Introduction</h1>
 <p><b>VoyagerCalc</b> is a free desktop application, published by The Calculator Store, that puts an HP Voyager calculator on your computer screen. It does not imitate the calculator with its own maths: it <b>emulates the ARM chip</b> inside the HP Collector’s Edition (CE) calculators and runs the <b>firmware file of your own calculator</b> on it. The calculator on screen therefore behaves exactly as that firmware does.</p>
-<p>Version 0.7.4 supports the <b>HP-16C CE</b> (computer scientist / programmer’s calculator) and the <b>HP-15C CE</b> (scientific calculator), and also the <b>HP-12C CE</b> (financial calculator), which this manual mentions only where it behaves differently.</p>
+<p>Version 0.7.5 supports the <b>HP-16C CE</b> (computer scientist / programmer’s calculator) and the <b>HP-15C CE</b> (scientific calculator), and also the <b>HP-12C CE</b> (financial calculator), which this manual mentions only where it behaves differently.</p>
 
 <h3>What you can do with it</h3>
 <ul>
@@ -50,9 +50,13 @@
 
 <div class="note"><b>No firmware is included.</b> Neither the app nor the source code contains HP firmware. You supply the firmware <code>.bin</code> file of your own calculator (about 112 KB). See <a href="#firmware">chapter 11</a> for where to get it. Using firmware is at your own responsibility.</div>
 
-<div class="warn"><b>Test release.</b> 0.7.4 is labelled a test release. USB reading and writing with a real calculator works in the author’s tests on Linux and on Windows 11 ARM (with a real HP-15C). The <b>Windows x64 build is untested on real hardware</b> (it passes the test suites and has been run only under emulation / wine). Please report problems on the GitHub project.</div>
+<div class="warn"><b>Test release.</b> 0.7.5 is labelled a test release. USB reading and writing with a real calculator works in the author’s tests on Linux and on Windows 11 ARM (with a real HP-15C). The <b>Windows x64 build is untested on real hardware</b> (it passes the test suites and has been run only under emulation / wine). Please report problems on the GitHub project.</div>
 
-<h3>What is new in 0.7.4</h3>
+<h3>What is new in 0.7.5</h3>
+<ul>
+  <li><b>HP-16C CE Enhanced firmware (E9E9) support:</b> the <span class="menu">Model</span> menu now switches correctly between <b>16C</b> and <b>15C (15.2)</b> on this firmware (its model picker shows “16 15.2”, so the 16C is on key 1 and 15.2 on key 3). Before, choosing the 16C pressed the wrong key and the calculator stayed in 15.2. On this firmware each mode keeps its own memory, so switching does not clear it.</li>
+</ul>
+<h3>What was new in 0.7.4</h3>
 <ul>
   <li><b>View ▸ Show Calculator Back</b> (<kbd>Ctrl</kbd>+<kbd>B</kbd> / <kbd>⌘</kbd><kbd>B</kbd>): a separate, resizable window with a photograph of the back of the HP-15C or HP-16C (see <a href="#back">“The calculator’s back”</a>).</li>
   <li><b>GTO from the program listing:</b> right-click a program line ▸ <i>GTO nnn</i> moves the program pointer there.</li>
@@ -70,23 +74,23 @@
 <p class="small">Earlier changes, briefly: 0.7.2 added <code>.15c</code> program import/export and a new 16C face; 0.7.1 added the Matrix Editor, Paste/Copy Matrix, <i>Click f/g Labels</i>, <i>Key Click Sound</i>, real-time-only speed (Turbo mode removed; program speed now matches a real 15C CE) and 16C memory-file layout checks; 0.7.0 was the first Linux and Windows release with the inspector, PDF documentation export, memory files and the USB link.</p>
 
 <h3>About this manual</h3>
-<p>This manual describes VoyagerCalc 0.7.4 as found in its README, installation guides and source code for the 0.7.4 release (draft, October 2026). Menu names are given as <span class="menu">Menu ▸ Item</span>. Shortcuts are written for Windows/Linux as <kbd>Ctrl</kbd>; on macOS use <kbd>⌘</kbd> instead. Operating the calculators themselves (RPN, programming, matrix and integer functions) is covered by HP’s owner’s handbooks for the HP-15C and HP-16C and is not repeated here.</p>
+<p>This manual describes VoyagerCalc 0.7.5 as found in its README, installation guides and source code for the 0.7.5 release (November 2026). Menu names are given as <span class="menu">Menu ▸ Item</span>. Shortcuts are written for Windows/Linux as <kbd>Ctrl</kbd>; on macOS use <kbd>⌘</kbd> instead. Operating the calculators themselves (RPN, programming, matrix and integer functions) is covered by HP’s owner’s handbooks for the HP-15C and HP-16C and is not repeated here.</p>
 
 <!-- ============ 2 REQUIREMENTS ============ -->
 <h1 id="req">2. System requirements</h1>
 <table class="grid">
 <thead><tr><th>Platform</th><th>Requirement</th><th>Download</th></tr></thead>
 <tbody>
-<tr><td><b>macOS</b></td><td>macOS 14 (Sonoma) or newer.<span class="fn">From the app’s deployment target (macOS 14.0) in the source.</span></td><td><code>VoyagerCalc-0.7.4-macOS.dmg</code> or <code>…-macOS.zip</code></td></tr>
-<tr><td><b>Windows</b></td><td>Windows 10 or 11, 64-bit. <b>x64</b> build for Intel/AMD PCs (also runs on Windows on ARM, more slowly, through emulation); <b>arm64</b> build for Windows on ARM (for example Windows 11 in Parallels on an Apple Silicon Mac). No administrator rights needed.</td><td><code>VoyagerCalc-0.7.4-windows-x64-setup.exe</code> / <code>…-x64.zip</code><br><code>VoyagerCalc-0.7.4-windows-arm64-setup.exe</code> / <code>…-arm64.zip</code></td></tr>
-<tr><td><b>Linux</b></td><td>64-bit desktop, <b>Debian 13 / Ubuntu 24.04 or newer</b>, x86_64 (Intel/AMD) or arm64. Qt 6.8 is bundled: no other software has to be installed.</td><td><code>VoyagerCalc-0.7.4-linux-x86_64.tar.gz</code><br><code>VoyagerCalc-0.7.4-linux-arm64.tar.gz</code></td></tr>
+<tr><td><b>macOS</b></td><td>macOS 14 (Sonoma) or newer.<span class="fn">From the app’s deployment target (macOS 14.0) in the source.</span></td><td><code>VoyagerCalc-0.7.5-macOS.dmg</code> or <code>…-macOS.zip</code></td></tr>
+<tr><td><b>Windows</b></td><td>Windows 10 or 11, 64-bit. <b>x64</b> build for Intel/AMD PCs (also runs on Windows on ARM, more slowly, through emulation); <b>arm64</b> build for Windows on ARM (for example Windows 11 in Parallels on an Apple Silicon Mac). No administrator rights needed.</td><td><code>VoyagerCalc-0.7.5-windows-x64-setup.exe</code> / <code>…-x64.zip</code><br><code>VoyagerCalc-0.7.5-windows-arm64-setup.exe</code> / <code>…-arm64.zip</code></td></tr>
+<tr><td><b>Linux</b></td><td>64-bit desktop, <b>Debian 13 / Ubuntu 24.04 or newer</b>, x86_64 (Intel/AMD) or arm64. Qt 6.8 is bundled: no other software has to be installed.</td><td><code>VoyagerCalc-0.7.5-linux-x86_64.tar.gz</code><br><code>VoyagerCalc-0.7.5-linux-arm64.tar.gz</code></td></tr>
 </tbody></table>
 <p><b>Also needed:</b></p>
 <ul>
   <li>The <b>firmware file</b> (<code>.bin</code>, about 112 KB) for your calculator: official HP firmware or one of the test / extended firmware builds (see <a href="#firmware">chapter 11</a>).</li>
   <li><i>Optional:</i> your real HP-12C/15C/16C CE and a USB cable, to transfer memory between the calculator and the app. On Windows no driver is needed (the standard Windows HID driver is used); on Linux the installer adds a small udev rule.</li>
 </ul>
-<p>All downloads are attached to the GitHub release <b>v0.7.4</b>:<br><a href="https://github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4">github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4</a></p>
+<p>All downloads are attached to the GitHub release <b>v0.7.5</b>:<br><a href="https://github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.5">github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.5</a></p>
 
 <!-- ============ 3 INSTALL ============ -->
 <h1 id="install">3. Installation</h1>
@@ -96,15 +100,15 @@
 <table class="grid">
 <thead><tr><th>System</th><th>Command (run in the download folder)</th></tr></thead>
 <tbody>
-<tr><td>Linux</td><td><code>sha256sum -c --ignore-missing SHA256SUMS</code><br>Expected output: <code>VoyagerCalc-0.7.4-linux-x86_64.tar.gz: OK</code></td></tr>
-<tr><td>macOS (Terminal)</td><td><code>shasum -a 256 -c --ignore-missing SHA256SUMS</code><br>or <code>shasum -a 256 VoyagerCalc-0.7.4-macOS.dmg</code> and compare by eye</td></tr>
-<tr><td>Windows (PowerShell)</td><td><code>Get-FileHash .\VoyagerCalc-0.7.4-windows-x64-setup.exe -Algorithm SHA256</code><br>then compare the hash (case does not matter) with the line in <code>SHA256SUMS</code></td></tr>
+<tr><td>Linux</td><td><code>sha256sum -c --ignore-missing SHA256SUMS</code><br>Expected output: <code>VoyagerCalc-0.7.5-linux-x86_64.tar.gz: OK</code></td></tr>
+<tr><td>macOS (Terminal)</td><td><code>shasum -a 256 -c --ignore-missing SHA256SUMS</code><br>or <code>shasum -a 256 VoyagerCalc-0.7.5-macOS.dmg</code> and compare by eye</td></tr>
+<tr><td>Windows (PowerShell)</td><td><code>Get-FileHash .\VoyagerCalc-0.7.5-windows-x64-setup.exe -Algorithm SHA256</code><br>then compare the hash (case does not matter) with the line in <code>SHA256SUMS</code></td></tr>
 </tbody></table>
 <p>The checksums of each release are published in its <code>SHA256SUMS</code> file (see <a href="#appendix-sums">Appendix A</a>). If a checksum does not match, delete the file and download it again.</p>
 
 <h2 id="install-mac">3.2 macOS</h2>
 <ol>
-  <li>Download <code>VoyagerCalc-0.7.4-macOS.dmg</code> (or the <code>.zip</code>) from the release page.</li>
+  <li>Download <code>VoyagerCalc-0.7.5-macOS.dmg</code> (or the <code>.zip</code>) from the release page.</li>
   <li>Open the <code>.dmg</code> and drag <b>VoyagerCalc</b> into your <b>Applications</b> folder (from the <code>.zip</code>: double-click to unpack, then move the app to Applications).</li>
   <li>Start VoyagerCalc from Applications or Launchpad.</li>
 </ol>
@@ -114,21 +118,21 @@
 <p><b>Choose the build:</b> <b>arm64</b> for a Windows-on-ARM computer, <b>x64</b> for an Intel/AMD PC.</p>
 <h3>Option A – installer (easiest)</h3>
 <ol>
-  <li>Double-click <code>VoyagerCalc-0.7.4-windows-x64-setup.exe</code> (or <code>…-arm64-setup.exe</code>).</li>
+  <li>Double-click <code>VoyagerCalc-0.7.5-windows-x64-setup.exe</code> (or <code>…-arm64-setup.exe</code>).</li>
   <li>It installs <b>for your user only</b> and needs <b>no administrator rights</b>. The program goes to <code>%LOCALAPPDATA%\Programs\VoyagerCalc</code>.</li>
   <li>The installer adds a Start menu folder <b>VoyagerCalc</b> with <i>VoyagerCalc</i>, <i>VoyagerCalc USB Test</i> and <i>Uninstall VoyagerCalc</i>.</li>
 </ol>
 <h3>Option B – portable zip (no installation)</h3>
 <ol>
-  <li>Right-click <code>VoyagerCalc-0.7.4-windows-x64.zip</code> (or <code>…-arm64.zip</code>) and choose <b>Extract All…</b>.</li>
+  <li>Right-click <code>VoyagerCalc-0.7.5-windows-x64.zip</code> (or <code>…-arm64.zip</code>) and choose <b>Extract All…</b>.</li>
   <li>Open the extracted folder and double-click <code>VoyagerCalc.exe</code>.</li>
 </ol>
 <p>The Windows programs and installers are code-signed with Azure Artifact Signing. If SmartScreen still shows a warning, see <a href="#ts-win">Troubleshooting</a>.</p>
 
 <h2 id="install-linux">3.4 Linux</h2>
 <ol>
-  <li><b>Download</b> the tarball for your computer: <code>VoyagerCalc-0.7.4-linux-x86_64.tar.gz</code> (Intel/AMD) or <code>…-linux-arm64.tar.gz</code> (ARM).</li>
-  <li><b>Unpack</b> it (right-click ▸ Extract, or <code>tar xzf VoyagerCalc-0.7.4-linux-*.tar.gz</code>).</li>
+  <li><b>Download</b> the tarball for your computer: <code>VoyagerCalc-0.7.5-linux-x86_64.tar.gz</code> (Intel/AMD) or <code>…-linux-arm64.tar.gz</code> (ARM).</li>
+  <li><b>Unpack</b> it (right-click ▸ Extract, or <code>tar xzf VoyagerCalc-0.7.5-linux-*.tar.gz</code>).</li>
   <li>In the new folder, run <code>./install.sh</code> as your <b>normal user</b> (not with <code>sudo</code>; it asks for the password itself when needed).
     <ul>
       <li>It checks that the package matches your CPU (x86_64 or arm64) and that the program can start on your system.</li>
@@ -169,6 +173,7 @@
 <p>Some firmware builds contain several calculator images (“multi-model builds”). Then the <span class="menu">Model</span> menu lists them, for example <b>12C</b>, <b>15C</b>, <b>15C (15.2)</b> and <b>16C</b>, and you can switch between them.</p>
 <ul>
   <li><b>Switching clears the calculator’s memory</b> (programs, registers and settings), as on the calculator. VoyagerCalc asks first and offers to save a backup.</li>
+  <li><b>HP-16C CE Enhanced (E9E9)</b> has two images, <b>16C</b> and <b>15C (15.2)</b>. Here <b>each mode keeps its own memory</b>: switching brings back the other mode’s programs, registers and settings, and the menu says “Each mode keeps its own memory”.</li>
   <li><b>15C (15.2)</b> is the HP-15C’s double-memory mode, which has more registers than the standard 15C mode.</li>
   <li>With a single-model firmware the menu shows only that model; with HP’s original 12C firmware it says “HP’s original firmware has no model switch”.</li>
 </ul>
@@ -381,7 +386,7 @@
 <!-- ============ 12 TROUBLESHOOTING ============ -->
 <h1 id="trouble">12. Troubleshooting</h1>
 <h2 id="ts-mac">12.1 macOS – Gatekeeper</h2>
-<p>The 0.7.4 Mac app is Developer ID signed, notarized and stapled, so macOS should open it normally. If macOS still refuses to open it:</p>
+<p>The 0.7.5 Mac app is Developer ID signed, notarized and stapled, so macOS should open it normally. If macOS still refuses to open it:</p>
 <ul>
   <li>Make sure you downloaded it from the official GitHub release and that its checksum matches <code>SHA256SUMS</code> (<a href="#verify">3.1</a>).</li>
   <li>Move the app into <b>Applications</b> before opening it.</li>
@@ -456,13 +461,13 @@
 <h3>Project</h3>
 <ul>
   <li>Linux / Windows source and all releases: <a href="https://github.com/Divasson2/VOyagerCalcLinux">github.com/Divasson2/VOyagerCalcLinux</a></li>
-  <li>Release 0.7.4: <a href="https://github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4">github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.4</a></li>
+  <li>Release 0.7.5: <a href="https://github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.5">github.com/Divasson2/VOyagerCalcLinux/releases/tag/v0.7.5</a></li>
   <li>Mac app source: <a href="https://github.com/Divasson2/VoyagerCalc">github.com/Divasson2/VoyagerCalc</a></li>
   <li>Report a problem: GitHub issues on the project page (attach the USB self-test output or USB log for USB problems).</li>
 </ul>
 
 <!-- ============ APPENDIX ============ -->
-<h1 id="appendix-sums">Appendix A. SHA-256 checksums of release 0.7.4</h1>
+<h1 id="appendix-sums">Appendix A. SHA-256 checksums of release 0.7.5</h1>
 <p>Every release comes with a <code>SHA256SUMS</code> file on its release page, which lists the checksum of each download. Always use the <code>SHA256SUMS</code> file downloaded from the release page.</p>
 <table class="sums">
 {{SUMS}}

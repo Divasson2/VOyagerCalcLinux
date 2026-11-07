@@ -178,12 +178,26 @@ void Machine::clearPrError() {
     if (displayText().contains(QStringLiteral("Pr Error"))) tap(keyBSP);
 }
 
-int Machine::modelMenuKey(int v) {
+bool Machine::isEnhanced16C152(const std::vector<int> &images) {
+    auto has = [&](int v) { return std::find(images.begin(), images.end(), v) != images.end(); };
+    return has(160) && has(152) && !has(120) && !has(150);
+}
+
+int Machine::modelMenuKey(int v, const std::vector<int> &images) {
+    // HP-16C Enhanced (E9E9): picker "16 15.2" -> keys 1/2 = 16C, keys 3/4 = 15.2.
+    if (isEnhanced16C152(images)) {
+        switch (v) { case 160: return 1; case 152: return 3; default: return -1; }
+    }
+    // Multi / 15C 3-ROM: "12 15.2  16" / "15 15.2  16" -> 1, 3, 5.
     switch (v) { case 120: case 150: return 1; case 152: return 3; case 160: return 5; default: return -1; }
 }
 
+int Machine::modelMenuKey(int v) {
+    return modelMenuKey(v, {120, 150, 152, 160});
+}
+
 void Machine::switchVariant(int v) {
-    int k = modelMenuKey(v);
+    int k = modelMenuKey(v, images_);
     if (images_.size() <= 1 || std::find(images_.begin(), images_.end(), v) == images_.end() || k < 0) return;
     powerOff();
     chordWithON({keyG, keyENTER});

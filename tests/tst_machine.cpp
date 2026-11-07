@@ -41,6 +41,38 @@ private slots:
         Machine m;
         QVERIFY_THROWS_EXCEPTION(vc::Error, m.loadFirmware(QByteArray(1000, 'x')));
     }
+    void modelMenuKeys() {
+        // Multi (E3E3) and 15C 3-ROM (C8C8): "12/15 15.2 16" -> keys 1, 3, 5 (unchanged)
+        const std::vector<int> multi{120, 152, 160}, threeRom{150, 152, 160}, enhanced{160, 152};
+        QCOMPARE(Machine::modelMenuKey(120, multi), 1);
+        QCOMPARE(Machine::modelMenuKey(152, multi), 3);
+        QCOMPARE(Machine::modelMenuKey(160, multi), 5);
+        QCOMPARE(Machine::modelMenuKey(150, threeRom), 1);
+        QCOMPARE(Machine::modelMenuKey(160, threeRom), 5);
+        QCOMPARE(Machine::modelMenuKey(160), 5);
+        // HP-16C Enhanced (E9E9): "16 15.2" -> 16C on key 1, 15.2 on key 3; no 12C
+        QVERIFY(Machine::isEnhanced16C152(enhanced));
+        QVERIFY(Machine::isEnhanced16C152({152, 160}));
+        QVERIFY(!Machine::isEnhanced16C152(multi));
+        QVERIFY(!Machine::isEnhanced16C152(threeRom));
+        QVERIFY(!Machine::isEnhanced16C152({160}));
+        QCOMPARE(Machine::modelMenuKey(160, enhanced), 1);
+        QCOMPARE(Machine::modelMenuKey(152, enhanced), 3);
+        QCOMPARE(Machine::modelMenuKey(120, enhanced), -1);
+    }
+    void e9e9SwitchBothWays() {
+        const QByteArray fw = vct::firmwareEnhanced16();
+        VC_REQUIRE(fw, "HP-16C Enhanced (E9E9)");
+        auto m = machine(fw);
+        QVERIFY(Machine::isEnhanced16C152(m->images()));
+        QCOMPARE(m->variant(), 160);
+        m->switchModel(152);
+        QCOMPARE(m->variant(), 152);
+        QVERIFY(!showsPrError(*m));
+        m->switchModel(160);
+        QCOMPARE(m->variant(), 160);
+        QVERIFY(!showsPrError(*m));
+    }
     void bootAndType() {
         each([&](Machine &m, const char *n) {
             type(m, "1 2 3");

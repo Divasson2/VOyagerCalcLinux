@@ -29,6 +29,7 @@ inline QByteArray firmwareMatching(const QString &glob) {
 }
 inline QByteArray firmware15() { return firmwareMatching("hp15c-3rom*"); }
 inline QByteArray firmwareMulti() { return firmwareMatching("HP12c-multi*E3E3.bin"); }
+inline QByteArray firmwareEnhanced16() { return firmwareMatching("HP16c-enhanced-152*E9E9.bin"); }
 inline QByteArray firmware16() { return firmwareMatching("Voyager16-ext-path-c-trim4-show-B7B7.bin"); }
 
 #define VC_REQUIRE(fw, what) do { if ((fw).isEmpty()) QSKIP("no " what " firmware (set VOYAGERCALC_FIRMWARE_DIR)"); } while (0)

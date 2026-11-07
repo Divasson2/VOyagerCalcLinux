@@ -41,6 +41,7 @@ class WelcomeWidget;
 struct PendingAction {
     enum Kind { SwitchModel, MemoryReset, LoadMemory, LoadMemoryAnyway, SwitchThenLoad } kind = SwitchModel;
     int variant = 0;
+    bool keepsMemory = false;   // HP-16C Enhanced (E9E9): each mode keeps its own memory
     QByteArray data;
     QString source, reason;
     QString title() const;
