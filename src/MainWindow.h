@@ -23,8 +23,10 @@
 
 class QAction;
 class QActionGroup;
+class QFrame;
 class QLabel;
 class QMenu;
+class QPushButton;
 class QSplitter;
 class QStackedWidget;
 class QThread;
@@ -56,6 +58,7 @@ struct PendingWrite {
     std::vector<int> calculatorModels;    // variants the calculator's memory fits (empty: unknown)
     QString backup;                       // path of the backup file
     bool needs152 = false;
+    QString layoutNote;          // 16C: slots of the emulator and of the connected calculator
     QString calculatorModel() const;
     bool matches() const { return calculatorModel() == emulatorModel; }
     QString title() const;
@@ -133,7 +136,12 @@ public:
     void openMemory();
     void openMemoryFile(const QString &path);
     void saveMemory(std::function<void()> after = nullptr);
-    void offerMemory(const QByteArray &data, const QString &source);
+    void offerMemory(const QByteArray &data, const QString &source, int explicitLayout = -1);
+    QString memoryImportStatus() const { return memoryImportStatus_; }
+    bool canUndoMemoryImport() const;
+    void undoMemoryImport();
+    void chooseInspectorLayout(int layout);     // VC_MEM16_*; 0 follows the firmware. Decoding only.
+    void setConnected16Layout(int layout);      // VC_MEM16_*; 0 = unknown (block a 16C write)
     void resetCalculator();
     void openProgramInfo();
     void openNotes();
@@ -268,6 +276,24 @@ private:
     bool restorePending_ = true;                      // the restored window has not met its first layout yet
     bool savedHadInspector_ = false;                  // the saved window size already included the flyout
     int inspectorWidth_ = 340;                        // the flyout's own width, remembered separately
+
+    // 0.7.6: automatic 16C layout import, and the note that offers Undo Load
+    int inspectorLayout_ = VC_MEM16_NONE;
+    int connectedLayout_ = VC_MEM16_NONE;
+    QString memoryImportStatus_;
+    struct MemoryUndo {
+        QByteArray data;
+        int variant = 0;
+        QString firmwareId;
+        ProgramDocument doc;
+        QString notesPath;
+        QString memoryFile;
+    };
+    std::optional<MemoryUndo> memoryUndo_;
+    QFrame *importBar_ = nullptr;
+    QLabel *importLabel_ = nullptr;
+    QPushButton *undoLoad_ = nullptr;
+    void refreshImportStatus();
 
     // usb
     QString linkStatus_;

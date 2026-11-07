@@ -41,7 +41,11 @@ void EngineWorker::start(const QByteArray &firmware, bool hasSaved, const SavedS
     try {
         machine_.loadFirmware(firmware);
         d.id = machine_.firmwareId(); d.info = machine_.calc.firmwareInfo(); d.checksum = machine_.calc.firmwareChecksum();
+        d.identification = machine_.calc.firmwareIdentification();
+        d.profileDetails = machine_.calc.firmwareProfileDetails();
         d.family = machine_.family(); d.capabilities = machine_.capabilities(); d.images = machine_.images();
+        d.mem16Layout = int(machine_.calc.firmwareMemory16Layout());
+        d.keepsModeMemory = machine_.keepsMemoryOnModelSwitch();
         note = machine_.boot(hasSaved ? &saved : nullptr);
     } catch (const Error &e) {
         emit booted(false, e.message(), QString(), d);
@@ -91,6 +95,7 @@ void EngineWorker::inspectNow(bool force) {
     if (!force && inspectClock_.elapsed() < 100) return;
     inspectClock_.restart();
     auto s = inspect(machine_.calc, true);
+    if (s) { s->firmwareName = machine_.calc.firmwareIdentification(); s->firmwareDetails = machine_.calc.firmwareProfileDetails(); }
     bool same = s.has_value() == lastInspection_.has_value() && (!s || *s == *lastInspection_);
     if (force || !same) {
         lastInspection_ = s;

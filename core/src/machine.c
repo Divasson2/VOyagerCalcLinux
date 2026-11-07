@@ -148,6 +148,19 @@ static void amap_put(amap *m, uint32_t k, uint32_t v) {
     m->used[i] = 1; m->key[i] = k; m->val[i] = v; m->n++;
 }
 
+/* One extendable data file, compiled into every app/core target. */
+#define FW(ce,name,modes,layout,slots,menu,k120,k150,k152,k160,method,notes,sources) \
+    {ce,name,modes,layout,slots,menu,k120,k150,k152,k160,method,notes,sources},
+static const vc_firmware_profile FIRMWARE_CATALOG[] = {
+#include "firmware_catalog.def"
+};
+#undef FW
+static const vc_firmware_profile *match_known_profile(const vc_calc *c);
+int vc_firmware_profile_count(void) { return (int)(sizeof FIRMWARE_CATALOG / sizeof FIRMWARE_CATALOG[0]); }
+const vc_firmware_profile *vc_firmware_profile_at(int i) {
+    return i >= 0 && i < vc_firmware_profile_count() ? &FIRMWARE_CATALOG[i] : NULL;
+}
+
 /* ---------------------------------------------------------------- the calculator */
 typedef struct { uint32_t oder, ovr, gper; } gpio_port;
 
@@ -156,6 +169,8 @@ struct vc_calc {
     vc_cpu cpu;
     uint8_t *img; size_t img_len;
     int model, family, variant, ext16, runner_ok;
+    int mem16_override;
+    const vc_firmware_profile *profile;
     uint32_t paint;
     int checksum;            /* CE checksum shown by the calculator (XYXY -> XY), -1 if the image is too short */
     uint32_t stripped;       /* bytes dropped from the front of the file (a full flash dump) */
@@ -393,7 +408,7 @@ static void ck_text(int ck, char out[12]) { if (ck < 0) snprintf(out, 12, "unkno
 int vc_load_firmware(vc_calc *c, const uint8_t *data, size_t len) {
     size_t i; char hs[65];
     if (!c || !data) return VC_ERR_ARG;
-    c->stripped = 0; c->checksum = -1; c->loose_paint = 0;
+    c->profile = NULL; c->mem16_override = 0; c->stripped = 0; c->checksum = -1; c->loose_paint = 0;
     /* 1. A full flash dump (bootloader 0..0x3FFF + the image at 0x4000): use the part from 0x4000. A file
      *    that is itself a valid image (also one padded with 0xFF after it) is used as it is. */
     if (len >= FLASH_DUMP && len <= FLASH_SIZE && !vector_ok(data, len) && vector_ok(data + FLASH_BASE, len - FLASH_BASE)) {
@@ -453,6 +468,7 @@ int vc_load_firmware(vc_calc *c, const uint8_t *data, size_t len) {
     c->ext16 = c->family == VC_MODEL_16C && (c->img[0xE000] | c->img[0xE001] | c->img[0xE002] | c->img[0xE003]);
     char ck[12], names[40]; ck_text(c->checksum, ck);
     int rm = rom_mask(c->img, len); rom_names(rm, names, sizeof names);
+    c->profile = match_known_profile(c);
     if (c->family == VC_FAMILY_STOCK) {
         if (stock_runnable(c))
             snprintf(c->info, sizeof c->info, "HP's original HP-12C firmware; limited: no inspector, memory files or model switch");
@@ -461,12 +477,13 @@ int vc_load_firmware(vc_calc *c, const uint8_t *data, size_t len) {
     } else {
         const char *base = c->family == VC_MODEL_16C ? "HP-16C CE firmware" : c->family == VC_MODEL_15C ? (loose && rm == 1 ? "HP-12C CE firmware" : loose && rm == 4 ? "HP-16C CE firmware" : "HP-15C CE firmware") :
                            c->family == VC_FAMILY_MULTI ? "HP-12C CE multi firmware (12C / 15C / 16C)" : "unknown firmware";
-        int m16 = c->family == VC_FAMILY_MULTI ? vc_firmware_mem16(c) : VC_MEM16_NONE;
-        const char *e16 = c->ext16 ? " (extended memory)" :
+        int m16 = vc_firmware_mem16(c);
+        const char *e16 = m16 == VC_MEM16_LAYOUT206 ? " (16C: EAEA layout206, 206 slots)" : c->ext16 ? " (extended memory)" :
                           m16 == VC_MEM16_EXT ? " (16C: extended memory)" : m16 == VC_MEM16_EXT_E3E3 ? " (16C: extended memory, early E3E3 layout)" :
                           m16 == VC_MEM16_STD ? " (16C: standard memory)" : "";
         snprintf(c->info, sizeof c->info, "%s%s%s", base, e16, loose && c->family != VC_MODEL_NONE ? " (recognised by its structure, not a tested build)" : "");
     }
+    if (c->profile) snprintf(c->info, sizeof c->info, "%s (CE %02X%02X, known firmware)", c->profile->display_name, c->checksum, c->checksum);
     c->engine = -1;
     if (c->family == VC_FAMILY_STOCK && !stock_runnable(c)) {
         snprintf(c->err, sizeof c->err, "This is HP calculator firmware in the original HP layout (checksum %s, contains the %s ROM). VoyagerCalc runs the original "
@@ -532,13 +549,24 @@ int vc_firmware_images(const vc_calc *c, int *variants, int max) {
     for (k = 0; k < 4; k++) if (found[k]) { if (n < max) variants[n] = ORDER[k]; n++; }
     return n;
 }
+const vc_firmware_profile *vc_firmware_known_profile(const vc_calc *c) { return c ? c->profile : NULL; }
+static const vc_firmware_profile *match_known_profile(const vc_calc *c) {
+    int variants[4], n = vc_firmware_images(c, variants, 4), j, i;
+    unsigned modes = 0;
+    if (!c || c->checksum < 0 || c->family == VC_FAMILY_STOCK || n <= 0) return NULL;
+    for (j = 0; j < n && j < 4; j++)
+        modes |= variants[j] == 120 ? VC_FW_12C : variants[j] == 150 ? VC_FW_150 : variants[j] == 152 ? VC_FW_152 : variants[j] == 160 ? VC_FW_16C : 0;
+    for (i = 0; i < vc_firmware_profile_count(); i++)
+        if (FIRMWARE_CATALOG[i].checksum == c->checksum && FIRMWARE_CATALOG[i].modes == modes) return &FIRMWARE_CATALOG[i];
+    return NULL;
+}
 int vc_model_variant(const vc_calc *c) { if (!c) return 0; update_active_model((vc_calc *)c); return c->variant ? c->variant : c->model * 10; }
 int vc_model(const vc_calc *c) { if (!c) return 0; update_active_model((vc_calc *)c); return c->model; }
 const char *vc_firmware_info(const vc_calc *c) { return c ? c->info : ""; }
 unsigned vc_capabilities(const vc_calc *c) {
     if (!c || c->family == VC_MODEL_NONE) return 0;
     if (c->family == VC_FAMILY_STOCK) return VC_CAP_KEYS_DISPLAY;
-    return VC_CAP_KEYS_DISPLAY | VC_CAP_INSPECT | VC_CAP_MEMORY | VC_CAP_MODEL_SWITCH;
+    return VC_CAP_KEYS_DISPLAY | (c->profile && c->profile->mem16_layout == VC_MEM16_LEGACY_B3 ? 0 : VC_CAP_INSPECT) | VC_CAP_MEMORY | VC_CAP_MODEL_SWITCH;
 }
 int vc_engine(const vc_calc *c) { return c ? c->engine : -1; }
 const char *vc_last_error(const vc_calc *c) { return c ? c->err : "no calculator"; }
@@ -966,19 +994,37 @@ int vci_ext16(const vc_calc *c) { return c ? c->ext16 : 0; }
  * eight register-address sites of the wrapper: E3E3 left them as `add.w rd, r2, rn, lsl #7` (first
  * halfword 0xEB02); E8E8 and later branch to caves that give the B7B7 offsets (flash 0x1318A is the first). */
 static int mem16_of_rom(const vc_calc *c, uint32_t rb) {
+    /* EAEA: all three independent floor constants are 2F, rather than 4D.
+     * Inspect the running Nut ROM, not a filename or an ambiguous RAM image. */
+    if (vci_rom_word(c, rb, 0x10D9) == 0x2F &&
+        vci_rom_word(c, rb, 0x1A1E) == 0x2F &&
+        vci_rom_word(c, rb, 0x1A47) == 0x2F) return VC_MEM16_LAYOUT206;
     if (vci_rom_word(c, rb, 0x1D4) != 0x15C) return VC_MEM16_STD;
     return vci_flash_u16(c, 0x1318A) == 0xEB02 ? VC_MEM16_EXT_E3E3 : VC_MEM16_EXT;
 }
+int vc_set_mem16_layout(vc_calc *c, int layout) {
+    if (!c || (layout != VC_MEM16_NONE && layout != VC_MEM16_EXT && layout != VC_MEM16_LAYOUT206 && layout != VC_MEM16_STD && layout != VC_MEM16_EXT_E3E3 && layout != VC_MEM16_LEGACY_B3)) return VC_ERR_ARG;
+    c->mem16_override = layout; return VC_OK;
+}
 int vc_mem16_layout(const vc_calc *c) {
     if (!c || vc_model(c) != VC_MODEL_16C) return VC_MEM16_NONE;
-    if (c->family == VC_MODEL_16C) return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
+    if (c->mem16_override) return c->mem16_override;
+    if (c->profile) return c->profile->mem16_layout;
+    if (c->family == VC_MODEL_16C) {
+        if (mem16_of_rom(c, A16_ROMBASE) == VC_MEM16_LAYOUT206) return VC_MEM16_LAYOUT206;
+        return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
+    }
     return mem16_of_rom(c, vci_rom_base(c));
 }
 /* Same, for the firmware file: the layout its 16C memory has, whatever model is active now. */
 int vc_firmware_mem16(const vc_calc *c) {
     uint32_t o;
     if (!c || !c->img || c->family == VC_MODEL_NONE || c->family == VC_FAMILY_STOCK) return VC_MEM16_NONE;
-    if (c->family == VC_MODEL_16C) return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
+    if (c->profile) return c->profile->mem16_layout;
+    if (c->family == VC_MODEL_16C) {
+        if (mem16_of_rom(c, A16_ROMBASE) == VC_MEM16_LAYOUT206) return VC_MEM16_LAYOUT206;
+        return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
+    }
     for (o = 0; o + 12 <= c->img_len; o += 2) {
         const uint8_t *p = c->img + o;
         if (p[2] != 0x4E || p[3] != 0 || p[4] != 0x70 || p[5] != 2 || p[6] != 0x38 || p[7] != 2 || p[8] != 0xEE || p[9] != 2) continue;

@@ -7,13 +7,14 @@
 #include "Emulator.h"
 #include <QString>
 #include <QStringList>
+#include <algorithm>
 #include <optional>
 #include <vector>
 
 namespace vc {
 
 struct RegisterValue {
-    QString name;           // "X", "LAST X", "I", "R0", "R.1", "R615", "PMT"
+    QString name;           // "X", "LAST X", "I", "R0", "R.1", "R615", "R720", "PMT"
     QString text;           // as the calculator shows it
     QString decimal;        // decimal value (16C integers per the complement mode)
     bool isInteger = false; // 16C integer mode
@@ -81,6 +82,34 @@ struct MatrixValue {
     }
 };
 
+/// HP-16C shared pool: storage grows up from the floor, the program grows down; FD/FE/FF stay fixed.
+struct Pool16 {
+    Emulator::Memory16Layout layout = Emulator::Memory16Layout::Automatic;
+    int wordSize = 0, lines = 0, registers = 0;
+    int slotCount() const { return Emulator::memory16Slots(layout); }   // not named slots(): Qt's moc macro
+    int programSlots() const { return (lines + 6) / 7; }
+    int availableSlots() const { return std::max(0, slotCount() - programSlots()); }
+    int dataBytes() const { return slotCount() * 7; }
+    int floor() const { return layout == Emulator::Memory16Layout::LegacyB3 ? 0x20 : 0xFD - slotCount(); }
+    int remap() const {
+        return layout == Emulator::Memory16Layout::Layout206 ? 0x0F : layout == Emulator::Memory16Layout::Standard ? 0 : 0x2D;
+    }
+    QString title() const { return Emulator::layoutTitle(layout); }
+    QString summary() const { return QStringLiteral("%1 slots / %2 bytes · program %3 slots · %4 registers at WS%5").arg(slotCount()).arg(dataBytes()).arg(programSlots()).arg(registers).arg(wordSize); }
+    QString range() const {
+        const bool standard = layout == Emulator::Memory16Layout::Standard;
+        const bool early = layout == Emulator::Memory16Layout::EarlyE3E3;
+        const bool wide = standard || layout == Emulator::Memory16Layout::Layout206;
+        const int file = standard ? 0x6F0 : early ? 0x170 : 0x168;
+        const int end = wide ? 0x7D7 : early ? 0x6EF : 0x6E7;
+        auto hex = [](int v, int width) { return QStringLiteral("%1").arg(v, width, 16, QLatin1Char('0')).toUpper(); };
+        return QStringLiteral("Nut %1–FC; file +%2–+%3; remap −%4").arg(hex(floor(), 2), hex(file, 3), hex(end, 3), hex(remap(), 2));
+    }
+    bool operator==(const Pool16 &o) const {
+        return layout == o.layout && wordSize == o.wordSize && lines == o.lines && registers == o.registers;
+    }
+};
+
 struct InspectorSnapshot {
     int model = 0, variant = 0;     // 12/15/16, 120/150/152/160
     int base = 10;                  // 16C: 16, 10, 8, 2, or 0 = FLOAT
@@ -89,9 +118,11 @@ struct InspectorSnapshot {
     bool programMode = false, running = false;
     int line = 0, lines = 0, registerCount = 0;
     bool hasI = false, hasProgram = false, extendedMemory = false;
+    QString firmwareName, firmwareDetails;
     std::vector<RegisterValue> stack, registers;
     std::vector<ProgramLine> program;
     std::optional<Pool15> pool;
+    std::optional<Pool16> pool16;
     std::vector<RegisterValue> imaginary;
     std::vector<MatrixValue> matrices;
 

@@ -27,7 +27,7 @@ namespace vc {
 
 namespace {
 
-enum class RowKind { Header, Reg, Pool, Matrix, Grid, Text, Prog };
+enum class RowKind { Header, Reg, Pool, Pool16, Matrix, Grid, Text, Prog };
 
 struct Row {
     RowKind kind = RowKind::Text;
@@ -36,6 +36,7 @@ struct Row {
     int step = -1;                                // Prog: line number, Matrix: index
     bool current = false, running = false, expanded = false, result = false, empty = false;
     std::shared_ptr<Pool15> pool;
+    std::shared_ptr<Pool16> pool16;
     QString copyText;                             // context menu
     qint64 flashUntil = 0;
     quint64 stamp = 0;                            // value signature, to see a register change
@@ -43,7 +44,8 @@ struct Row {
         return kind == o.kind && name == o.name && value == o.value && sub == o.sub && suffix == o.suffix && keys == o.keys
             && prefix == o.prefix && mnemonic == o.mnemonic && comment == o.comment && step == o.step && current == o.current
             && running == o.running && expanded == o.expanded && result == o.result && empty == o.empty
-            && ((!pool && !o.pool) || (pool && o.pool && *pool == *o.pool));
+            && ((!pool && !o.pool) || (pool && o.pool && *pool == *o.pool))
+            && ((!pool16 && !o.pool16) || (pool16 && o.pool16 && *pool16 == *o.pool16));
     }
 };
 
@@ -168,6 +170,7 @@ public:
         case RowKind::Header: h = 20; break;
         case RowKind::Reg: h = r.sub.isEmpty() ? 22 : 34; break;
         case RowKind::Pool: h = 74; break;
+        case RowKind::Pool16: h = 72; break;
         case RowKind::Grid: h = 16; break;
         case RowKind::Prog: h = 20; break;
         case RowKind::Text: h = 54; break;
@@ -211,6 +214,24 @@ public:
             break;
         }
         case RowKind::Pool: paintPool15Bar(p, rc, *r.pool, base); break;
+        case RowKind::Pool16: {
+            const Pool16 &pl = *r.pool16;
+            const int pad = 10;
+            QFont b = base; b.setBold(true); b.setPointSizeF(base.pointSizeF() * 0.9);
+            p->setFont(b); p->setPen(text);
+            p->drawText(QRect(rc.left() + pad, rc.top() + 4, rc.width() - 2 * pad, 16), Qt::AlignVCenter | Qt::AlignLeft,
+                        p->fontMetrics().elidedText(pl.title(), Qt::ElideRight, rc.width() - 2 * pad));
+            QRectF bar(rc.left() + pad, rc.top() + 24, rc.width() - 2 * pad, 10);
+            const double slotTotal = std::max(1, pl.slotCount());
+            const double avail = bar.width() * pl.availableSlots() / slotTotal;
+            p->setPen(Qt::NoPen);
+            p->setBrush(QColor(0x4CBF6B)); p->drawRect(QRectF(bar.left(), bar.top(), std::max(0.0, avail), bar.height()));
+            p->setBrush(QColor(0xE3A33B)); p->drawRect(QRectF(bar.left() + std::max(0.0, avail), bar.top(), bar.width() - std::max(0.0, avail), bar.height()));
+            QFont f = base; f.setPointSizeF(base.pointSizeF() * 0.82); p->setFont(f); p->setPen(dim);
+            p->drawText(QRect(rc.left() + pad, rc.top() + 36, rc.width() - 2 * pad, 14), Qt::AlignVCenter, p->fontMetrics().elidedText(pl.summary(), Qt::ElideRight, rc.width() - 2 * pad));
+            p->drawText(QRect(rc.left() + pad, rc.top() + 52, rc.width() - 2 * pad, 14), Qt::AlignVCenter, p->fontMetrics().elidedText(pl.range(), Qt::ElideRight, rc.width() - 2 * pad));
+            break;
+        }
         case RowKind::Matrix: {
             p->setOpacity(r.empty ? 0.45 : 1.0);
             p->setFont(base); p->setPen(dim);
@@ -518,6 +539,7 @@ void InspectorPanel::rebuild() {
 
     // header
     QString modelName = s->model == 15 && s->variant == 152 ? QStringLiteral("HP-15C (15.2)") : QStringLiteral("HP-%1C").arg(s->model);
+    if (!s->firmwareName.isEmpty()) modelName += QStringLiteral("<br><span style=\"color:gray;font-weight:normal;font-size:small\">%1</span>").arg(s->firmwareName.toHtmlEscaped());
     QString tags;
     auto tag = [&](const QString &t, const QColor &c) { tags += QStringLiteral(" <span style=\"color:%1;border:1px solid %1;font-size:small\">&nbsp;%2&nbsp;</span>").arg(c.name(), t); };
     if (s->extendedMemory) tag(QStringLiteral("ext. memory"), QApplication::palette().color(QPalette::PlaceholderText));
@@ -587,6 +609,12 @@ void InspectorPanel::rebuild() {
                     if (m.cols > cc) { Row t; t.kind = RowKind::Grid; t.value = QStringLiteral("%1×%2: copy as TSV to see all").arg(m.rows).arg(m.cols); rows.push_back(t); }
                 }
             }
+        }
+        if (s->pool16) {
+            header(QStringLiteral("Memory"));
+            Row pr; pr.kind = RowKind::Pool16; pr.pool16 = std::make_shared<Pool16>(*s->pool16);
+            pr.name = pr.pool16->title(); pr.value = pr.pool16->summary(); pr.sub = pr.pool16->range(); pr.help = pr.pool16->summary();
+            rows.push_back(pr);
         }
         header(QStringLiteral("Storage registers (%1)").arg(s->registerCount));
         int shown = 0;

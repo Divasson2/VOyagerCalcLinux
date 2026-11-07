@@ -294,7 +294,7 @@ private:
 
     void memory() {
         auto rows = c_.memoryRows();
-        if (rows.empty() || !c_.pool) return;
+        if (rows.empty()) return;
         heading(QStringLiteral("Memory configuration"));
         Style k(Role::Regular, 9, kGrey), v(Role::Regular, 9.5, kInk);
         for (auto &[a, b] : rows) {
@@ -304,6 +304,20 @@ private:
             for (int i = 0; i < w.size(); ++i) text(w[i], left + 100, y + 9.5 + i * 12.5, v);
             y += w.size() * 12.5;
         }
+        if (c_.pool16) {
+            const Pool16 &p = *c_.pool16;
+            need(40);
+            y += 6;
+            const double slotTotal = std::max(1, p.slotCount());
+            const double w = contentWidth() * p.availableSlots() / slotTotal;
+            fill(left, y, w, 10, QColor(0x4CBF6B));
+            if (w < contentWidth()) fill(left + w, y, contentWidth() - w, 10, QColor(0xE3A33B));
+            y += 24;
+            text(QStringLiteral("Storage capacity / program (not nonzero-register usage)"), left, y, k);
+            y += 12;
+            return;
+        }
+        if (!c_.pool) return;
         need(40);
         y += 6;
         auto segs = c_.pool->segments();

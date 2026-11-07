@@ -74,7 +74,9 @@ public:
     void writeMatrix15(int m, int rows, int cols, const std::vector<uint64_t> &raw);
 
     static QString variantName(int v);           // "12C", "15C", "15C (15.2)", "16C"
-    static bool isEnhanced16C152(const std::vector<int> &images);           // E9E9-style: 16C + 15.2 only
+    static bool isEnhanced16C152(const std::vector<int> &images);           // E9E9-style image set: 16C + 15.2 only
+    /// Catalogue policy. Unknown versions do not promise per-mode memory.
+    bool keepsMemoryOnModelSwitch() const;
     static int modelMenuKey(int variant, const std::vector<int> &images);   // key under the picker label
     static int modelMenuKey(int variant);        // Multi / 3-ROM map (1/3/5)
 

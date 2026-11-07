@@ -183,6 +183,11 @@ bool Machine::isEnhanced16C152(const std::vector<int> &images) {
     return has(160) && has(152) && !has(120) && !has(150);
 }
 
+bool Machine::keepsMemoryOnModelSwitch() const {
+    if (auto p = calc.knownFirmware()) return p->perModeSlots;
+    return false;
+}
+
 int Machine::modelMenuKey(int v, const std::vector<int> &images) {
     // HP-16C Enhanced (E9E9): picker "16 15.2" -> keys 1/2 = 16C, keys 3/4 = 15.2.
     if (isEnhanced16C152(images)) {
@@ -197,11 +202,21 @@ int Machine::modelMenuKey(int v) {
 }
 
 void Machine::switchVariant(int v) {
-    int k = modelMenuKey(v, images_);
+    const auto profile = calc.knownFirmware();
+    int k = profile ? profile->keyFor(v) : -1;
+    if (k < 0) k = modelMenuKey(v, images_);
     if (images_.size() <= 1 || std::find(images_.begin(), images_.end(), v) == images_.end() || k < 0) return;
+    int menuKey = 16;           // "4": the service menu on every catalogue entry that switches
+    if (profile) {
+        if (profile->switchMenu <= 0) return;
+        const QByteArray name = QByteArray::number(profile->switchMenu);
+        const int found = Emulator::keyCode(model(), name.constData());
+        if (found < 0) return;
+        menuKey = found;
+    }
     powerOff();
     chordWithON({keyG, keyENTER});
-    tap(16);                    // "4": model menu
+    tap(menuKey);
     tap(k); run(2000);
     clearPrError();
     powerOn();

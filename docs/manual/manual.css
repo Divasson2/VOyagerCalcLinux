@@ -1,5 +1,5 @@
 @page { size: A4; margin: 22mm 20mm 22mm 20mm;
-  @top-left { content: "VoyagerCalc 0.7.4 · User Manual"; font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
+  @top-left { content: "VoyagerCalc 0.7.6 · User Manual"; font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
   @top-right { content: string(chapter); font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
   @bottom-left { content: "The Calculator Store · thecalculatorstore.com"; font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }
   @bottom-right { content: "Page " counter(page) " of " counter(pages); font: 8.5pt "DejaVu Sans", sans-serif; color: #888; }

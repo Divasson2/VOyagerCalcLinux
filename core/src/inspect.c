@@ -11,7 +11,8 @@
  *   HP-16C       LAST X = Nut 3, status = Nut 6, high bytes of 64-bit words = Nut 7,
  *                I = Nut 0xFD (+ high byte in Nut 0xFE), last line = Nut 0xFE, line = Nut 0xFF.
  *                Pool: Path-C 176 registers (logical Nut 0x4D..0xFC; B5/B7B7 and the multi E8E8 at
- *                dump 0x168, the first extended multi E3E3 at 0x170), stock 29 registers (Nut
+ *                dump 0x168, the first extended multi E3E3 at 0x170), EAEA 206 registers (logical
+ *                Nut 0x2F..0xFC, dump 0x168; R0–R720 at word size 16), stock 29 registers (Nut
  *                0xE0..0xFC, 0x6F0; standalone stock 16C and the multi E6E6). vc_mem16_layout() tells.
  *                R0 = nibble 0 of the pool, registers packed linearly, ceil(WSIZE/4) nibbles each;
  *                the program grows down from the top register, 7 lines per register.
@@ -64,8 +65,9 @@ static int get_layout(vc_calc *c, layout *L) {
     if (L->model == VC_MODEL_16C) {
         int lay = vc_mem16_layout(c);
         L->mem_layout = lay;
-        L->pathc = lay == VC_MEM16_EXT || lay == VC_MEM16_EXT_E3E3;
-        if (L->pathc) { L->first = 0x4D; L->slots = 176; L->pool = lay == VC_MEM16_EXT ? 0x168 : 0x170; }
+        if (lay == VC_MEM16_LEGACY_B3) return VC_ERR_UNSUPPORTED;
+        L->pathc = lay == VC_MEM16_EXT || lay == VC_MEM16_EXT_E3E3 || lay == VC_MEM16_LAYOUT206;
+        if (L->pathc) { L->first = lay == VC_MEM16_LAYOUT206 ? 0x2F : 0x4D; L->slots = 0xFD - L->first; L->pool = lay == VC_MEM16_EXT_E3E3 ? 0x170 : 0x168; }
         else { L->pool = 0x6F0; L->first = 0xE0; L->slots = 29; }
     }
     return L->model ? VC_OK : VC_ERR_STATE;
@@ -461,7 +463,10 @@ int vc_inspect_matrix(vc_calc *c, int m, int row, int col, vc_value *o) {
 }
 
 /* ------------------------------------------------------------ 16C memory image layouts */
-/* Where the data of a 2 KB image sits tells which layout wrote it (found with the dumps of B7B7,
+/* Legacy structural classifier for pre-206 callers. Modern apps use vc_memory_analyze16:
+ * a sparse 206 image with a program at the top can be byte-identical to a stock image.
+ * Pool location alone is not a reliable modern layout tag.
+ * Where the data of a 2 KB image sits suggested its historical layout (found with the dumps of B7B7,
  * E3E3, E8E8, E6E6 and the stock 16C, core/tests/test_mem16.c):
  *   standard   data only in 0x6F0..0x7D7 (29 registers; the pool is the top 232 bytes), nothing below;
  *   extended   data in 0x168..0x6EF, nothing in 0x6F0..0x7D7. B7B7 / E8E8: R0 starts at 0x168 and the
@@ -484,7 +489,8 @@ int vc_memory_layout(const uint8_t mem[VC_MEMORY_SIZE]) {
 }
 
 static const char *layout_name(int l) {
-    return l == VC_MEM16_STD ? "standard 16C memory (203 bytes, HP-16C CE stock / multi E6E6)" :
+    return l == VC_MEM16_LAYOUT206 ? "EAEA layout206 memory (206 slots, 1442 data bytes)" :
+           l == VC_MEM16_STD ? "standard 16C memory (203 bytes, HP-16C CE stock / multi E6E6)" :
            l == VC_MEM16_EXT ? "extended 16C memory (B5B5 / B7B7 / multi E8E8 layout)" :
            l == VC_MEM16_EXT_E3E3 ? "extended 16C memory in the early multi E3E3 layout (8 bytes later)" : "an unknown layout";
 }
@@ -495,10 +501,21 @@ int vc_memory_precheck(const vc_calc *c, const uint8_t mem[VC_MEMORY_SIZE], vc_m
     o->image_layout = vc_memory_layout(mem);
     o->firmware_layout = vc_mem16_layout(c);
     int f = o->firmware_layout, i = o->image_layout;
+    if (f == VC_MEM16_LEGACY_B3) {
+        o->verdict = VC_MEMCHK_WARN;
+        snprintf(o->message, sizeof o->message, "B3B3 uses a legacy aliased pool, not linear layout176. Host conversion/loading is unsupported; retain the original raw backup.");
+        return VC_OK;
+    }
     if (f == VC_MEM16_NONE || i == VC_MEM16_ANY || i == f) return VC_OK;        /* 12C / 15C: nothing to check here */
-    if (i == VC_MEM16_NONE) {
+    if (f == VC_MEM16_LAYOUT206 || (f == VC_MEM16_EXT && i == VC_MEM16_LAYOUT206)) {
+        o->verdict = VC_MEMCHK_WARN;
+        snprintf(o->message, sizeof o->message, "Raw 16C images have no reliable 176/206 layout tag. Confirm the source layout before loading; programs must move 240 bytes between B7B7/E9E9 and EAEA. Never infer compatibility from a successful trial load.");
+    } else if (i == VC_MEM16_NONE) {
         o->verdict = VC_MEMCHK_WARN;
         snprintf(o->message, sizeof o->message, "This does not look like an HP-16C memory file: data is stored in the areas of both 16C memory layouts (a 15C or damaged file?).");
+    } else if (f == VC_MEM16_EXT && i == VC_MEM16_STD) {
+        o->verdict = VC_MEMCHK_WARN;
+        snprintf(o->message, sizeof o->message, "This top-of-image pool may be factory 29-slot memory OR sparse EAEA layout206 memory, not reliably standard memory. This firmware uses B7B7/E9E9 layout176. Select the source layout; a 206 image needs conversion before loading.");
     } else if (f == VC_MEM16_EXT && i == VC_MEM16_EXT_E3E3) {
         o->verdict = VC_MEMCHK_CONVERT;
         snprintf(o->message, sizeof o->message, "This memory file was saved on the early extended-memory multi firmware (E3E3): its registers sit 8 bytes later than on this firmware. It can be converted (nothing else changes).");
@@ -513,6 +530,90 @@ int vc_memory_convert_e3e3(uint8_t mem[VC_MEMORY_SIZE]) {
     if (!mem || vc_memory_layout(mem) != VC_MEM16_EXT_E3E3) return 0;
     memmove(mem + 0x168, mem + 0x170, 0x6F0 - 0x170);       /* 175 registers of the pool, 8 bytes down */
     memset(mem + 0x6E8, 0, 8);                               /* the last register slot: outside the pool in the new layout */
+    return 1;
+}
+
+/* CM validity: the wrapper compares a fixed 64-bit literal, not a checksum.
+ * 0E0E/B7B7/E9E9/EAEA share the identical routine at ARM 0x8894..0x88FA.
+ * These are structural hypotheses; nonzero program heads only rank evidence.
+ * In particular, stock and sparse206 can be byte-for-byte identical. */
+static const uint8_t CM_MAGIC[8] = {0xAF,0x54,0x39,0xFE,0xD9,0x67,0xBC,0x12};
+static int image_pool16(int l, int *base, int *slots, int *floor) {
+    switch (l) {
+    case VC_MEM16_STD: *base=0x6F0; *slots=29; break;
+    case VC_MEM16_EXT: *base=0x168; *slots=176; break;
+    case VC_MEM16_EXT_E3E3: *base=0x170; *slots=176; break;
+    case VC_MEM16_LAYOUT206: *base=0x168; *slots=206; break;
+    default: return 0;
+    }
+    *floor=0xFD-*slots; return 1;
+}
+static int image_ptr16(int p) {
+    if (!p) return 0;
+    int a=p&255, pos=p>>8;
+    return a>=0x2F && a<=0xFC && pos>=1 && pos<=7 ? (0xFC-a)*7+pos : -1;
+}
+int vc_memory_analyze16(const uint8_t mem[VC_MEMORY_SIZE], vc_mem16_analysis *o) {
+    if (!mem || !o) return VC_ERR_ARG;
+    memset(o,0,sizeof *o);
+    /* Gap plus only the USER-POOL part of physical chips 13/14; never FD/FE/FF. */
+    o->gap_empty=!nz(mem,0x6E8,0x6F0);
+    o->stock_pool_empty=!nz(mem,0x6F0,0x7D8);
+    o->upper_empty=o->gap_empty && o->stock_pool_empty;
+    o->magic_valid=!memcmp(mem+0x7F0,CM_MAGIC,8);
+    if (!o->magic_valid) return VC_OK;
+    int fe=mem[0x7E0] | (mem[0x7E1]&15)<<8;
+    int ff=mem[0x7E8] | (mem[0x7E9]&15)<<8;
+    int n=image_ptr16(fe), current=image_ptr16(ff);
+    o->lines=n;
+    if (n<0 || n>999 || current<0 || current>n) return VC_OK;
+    o->pointers_valid=1;
+    static const int layouts[]={VC_MEM16_STD,VC_MEM16_EXT,VC_MEM16_LAYOUT206};
+    unsigned j;
+    for (j=0;j<sizeof layouts/sizeof layouts[0];j++) {
+        int l=layouts[j], base=0,slots=0,floor=0,k,bad=0;
+        if (!image_pool16(l,&base,&slots,&floor)) continue;
+        if ((fe && (fe&255)<floor) || (ff && (ff&255)<floor) || n>slots*7) continue;
+        if (nz(mem,0x168,base) || nz(mem,base+slots*8,0x7D8)) continue;
+        for (k=0;k<slots;k++) if (mem[base+k*8+7]) { bad=1; break; }
+        if (bad) continue;
+        o->candidates|=1u<<l;
+        /* Program bytes may be zero (legal LBL 0). Record occupied payload,
+         * but do not invent another layout from the first cell's contents. */
+        for (k=0;k<n;k++) if (mem[base+(slots-1-k/7)*8+k%7]) { o->program_heads|=1u<<l; break; }
+    }
+    o->primary_candidates=o->candidates;
+    /* Primary normal-616 fingerprint: the entire old high pool AND gap are
+     * empty, with a populated program in the lower 176 pool. Empty/zero-only
+     * captures retain all hypotheses and use byte-equivalence/current layout.
+     * This is not an identity tag: USB/canary bytes can occupy idle storage. */
+    if (o->upper_empty && (o->candidates&(1u<<VC_MEM16_EXT)) &&
+        (o->program_heads&(1u<<VC_MEM16_EXT))) o->primary_candidates=1u<<VC_MEM16_EXT;
+    return VC_OK;
+}
+
+/* Clean-room generalization of the pool206 converter, also stock/E3E3.
+ * Copy occupied low storage and complete program cells; reject any lost data.
+ * FD/FE/FF, CPU/header, magic and keyboard bytes are never rewritten. */
+int vc_memory_convert_pool(uint8_t mem[VC_MEMORY_SIZE], int source, int target) {
+    int sb,ns,sfloor,tb,nt,tfloor;
+    if (!mem || source==target || !image_pool16(source,&sb,&ns,&sfloor) || !image_pool16(target,&tb,&nt,&tfloor)) return 0;
+    if (mem[0]!=0 || mem[1]!=8 || mem[2] || mem[3] ||
+        memcmp(mem+0x7F0,CM_MAGIC,8) || (mem[0x4E]&0x80)) return 0;
+    int fe=mem[0x7E0] | (mem[0x7E1]&15)<<8;
+    int ff=mem[0x7E8] | (mem[0x7E9]&15)<<8;
+    int lines=image_ptr16(fe), current=image_ptr16(ff);
+    if (lines<0 || lines>999 || current<0 || current>lines ||
+        (fe && ((fe&255)<sfloor || (fe&255)<tfloor))) return 0;
+    int prog=(lines+6)/7;
+    if (prog>ns || prog>nt) return 0;
+    int sf=ns-prog,tf=nt-prog;
+    if (nz(mem,0x168,sb) || nz(mem,sb+ns*8,0x7D8)) return 0;
+    if (tf<sf && nz(mem,sb+tf*8,sb+sf*8)) return 0;
+    uint8_t old[VC_MEMORY_SIZE]; memcpy(old,mem,sizeof old);
+    memset(mem+0x168,0,206*8);
+    memcpy(mem+tb,old+sb,(size_t)(sf<tf?sf:tf)*8);
+    if (prog) memcpy(mem+tb+tf*8,old+sb+sf*8,(size_t)prog*8);
     return 1;
 }
 

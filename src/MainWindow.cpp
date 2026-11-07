@@ -30,6 +30,7 @@
 #include <QDialogButtonBox>
 #include <QDragEnterEvent>
 #include <QFile>
+#include <QFrame>
 #include <QFontDatabase>
 #include <QHBoxLayout>
 #include <QFileDialog>
@@ -117,6 +118,7 @@ QString PendingWrite::message() const {
         m = QStringLiteral("The connected calculator's memory does not look like a memory this firmware knows. It gets the emulator's %1 memory.").arg(emulatorModel);
     }
     if (needs152) m += QStringLiteral(" This memory uses the HP-15C (15.2) double memory: set the calculator to 15C (15.2) mode first (turn it off, hold g and ENTER, press ON, 4, then the key under 15.2), or it will show Error 10.");
+    if (!layoutNote.isEmpty()) m += layoutNote;
     return m + QStringLiteral(" Its current memory was saved to “%1” in %2.").arg(QFileInfo(backup).fileName(), QFileInfo(backup).absolutePath());
 }
 
@@ -222,6 +224,21 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     busy_ = new QLabel(stack_);
     busy_->setStyleSheet("background:rgba(40,40,40,0.92);color:white;border-radius:14px;padding:8px 16px;font-size:13px;");
     busy_->hide();
+    importBar_ = new QFrame(stack_);
+    importBar_->setObjectName(QStringLiteral("memoryImportStatus"));
+    importBar_->setStyleSheet("QFrame#memoryImportStatus{background:rgba(28,23,20,0.94);border:1px solid rgba(255,255,255,0.28);border-radius:6px;} "
+                              "QLabel{color:#f4efe6;font-size:11px;} QPushButton{color:#E3A63A;font-size:11px;font-weight:bold;border:none;padding:2px 6px;}");
+    auto *importRow = new QHBoxLayout(importBar_);
+    importRow->setContentsMargins(8, 4, 4, 4); importRow->setSpacing(6);
+    importLabel_ = new QLabel(importBar_);
+    importLabel_->setWordWrap(true); importLabel_->setMaximumWidth(460);
+    undoLoad_ = new QPushButton(QStringLiteral("Undo Load"), importBar_);
+    undoLoad_->setObjectName(QStringLiteral("undoLoad"));
+    auto *dismiss = new QPushButton(QStringLiteral("×"), importBar_);
+    importRow->addWidget(importLabel_, 1); importRow->addWidget(undoLoad_); importRow->addWidget(dismiss);
+    importBar_->hide();
+    connect(undoLoad_, &QPushButton::clicked, this, &MainWindow::undoMemoryImport);
+    connect(dismiss, &QPushButton::clicked, this, [this] { memoryImportStatus_.clear(); refreshImportStatus(); });
 
     QSettings st;
     paper_ = st.value(QStringLiteral("pdfPaper"), QStringLiteral("a4")).toString() == QLatin1String("letter") ? Paper::Letter : Paper::A4;
@@ -412,9 +429,30 @@ void MainWindow::rebuildModelMenu() {
     if (fw_.images.size() > 1) {
         modelMenu_->addSeparator();
         modelMenu_->addAction(switching_ ? QStringLiteral("Switching…")
-            : (Machine::isEnhanced16C152(fw_.images)
+            : (fw_.keepsModeMemory
                ? QStringLiteral("Each mode keeps its own memory")
-               : QStringLiteral("Switching clears the calculator's memory")))->setEnabled(false);
+               : QStringLiteral("Switching can clear the calculator's memory")))->setEnabled(false);
+    }
+    if (running_ && snap_.variant == 160) {
+        modelMenu_->addSeparator();
+        QMenu *decode = modelMenu_->addMenu(QStringLiteral("16C inspector layout"));
+        auto *decodeGroup = new QActionGroup(decode);
+        const int choices[] = {VC_MEM16_NONE, VC_MEM16_STD, VC_MEM16_EXT, VC_MEM16_LAYOUT206};
+        for (int lay : choices) {
+            const auto layout = Emulator::Memory16Layout(lay);
+            QAction *a = decode->addAction(Emulator::layoutTitle(layout), this, [this, lay] { chooseInspectorLayout(lay); });
+            a->setCheckable(true); a->setChecked(inspectorLayout_ == lay); decodeGroup->addAction(a);
+        }
+        decode->addSeparator();
+        decode->addAction(QStringLiteral("Decoding only; does not change firmware"))->setEnabled(false);
+        QMenu *usbLay = modelMenu_->addMenu(QStringLiteral("USB 16C layout (physical self-test)"));
+        auto *usbGroup = new QActionGroup(usbLay);
+        for (int lay : choices) {
+            const QString title = lay == VC_MEM16_NONE ? QStringLiteral("Unknown: ask on read; block write")
+                                                       : Emulator::layoutTitle(Emulator::Memory16Layout(lay));
+            QAction *a = usbLay->addAction(title, this, [this, lay] { setConnected16Layout(lay); });
+            a->setCheckable(true); a->setChecked(connectedLayout_ == lay); usbGroup->addAction(a);
+        }
     }
     if (isStock()) { modelMenu_->addSeparator(); modelMenu_->addAction(QStringLiteral("HP's original firmware has no model switch"))->setEnabled(false); }
 }
@@ -569,6 +607,11 @@ void MainWindow::onBooted(bool ok, const QString &message, const QString &note, 
         return;
     }
     fw_ = d; firmwareName_ = pendingName_; running_ = true;
+    inspectorLayout_ = VC_MEM16_NONE;
+    connectedLayout_ = VC_MEM16_NONE;
+    memoryUndo_.reset();
+    memoryImportStatus_.clear();
+    refreshImportStatus();
     if (rememberAfterBoot_) { QString err; FirmwareStore::remember({firmwareName_, firmwareData_}, &err); }
     calc_->setKeysEnabled(true);
     stack_->setCurrentWidget(split_);
@@ -704,6 +747,7 @@ void MainWindow::resizeEvent(QResizeEvent *e) {
     QMainWindow::resizeEvent(e);
     busy_->adjustSize();
     busy_->move((stack_->width() - busy_->width()) / 2, stack_->height() - busy_->height() - 16);
+    refreshImportStatus();
 }
 
 // ---- keys ------------------------------------------------------------------------------------------------------------
@@ -811,7 +855,7 @@ void MainWindow::chooseModel(int v) {
     if (isStock()) return stockUnavailable(QStringLiteral("Switching the model"));
     if (!(fw_.images.size() > 1 && running_ && !switching_) || std::find(fw_.images.begin(), fw_.images.end(), v) == fw_.images.end()) return;
     PendingAction a; a.kind = PendingAction::SwitchModel; a.variant = v;
-    a.keepsMemory = Machine::isEnhanced16C152(fw_.images);
+    a.keepsMemory = fw_.keepsModeMemory;
     int r = prompts.confirm ? prompts.confirm(a) : 0;
     if (r == 2) backupThenConfirm(a); else if (r == 1) confirm(a);
 }
@@ -831,11 +875,23 @@ void MainWindow::confirm(const PendingAction &a) {
         switchModel(a.variant);
         break;
     case PendingAction::LoadMemory:
-    case PendingAction::LoadMemoryAnyway:
-        worker_->submit(this, [d = a.data](Machine &m) { m.putMemory(d); }, [this](const QString &e) {
-            if (!e.isEmpty()) showError(e); else memoryLoaded();
+    case PendingAction::LoadMemoryAnyway: {
+        MemoryUndo undo;
+        undo.variant = snap_.variant; undo.firmwareId = fw_.id; undo.doc = doc_; undo.notesPath = notesPath_; undo.memoryFile = memoryFileName_;
+        QString err;
+        const bool saved = worker_->performAndWait([&](Machine &m) { undo.data = m.memory(true); }, &err);
+        if (!saved) { showError(QStringLiteral("Could not retain an undo backup; nothing was loaded: %1").arg(err)); return; }
+        worker_->submit(this, [d = a.data](Machine &m) { m.putMemory(d); }, [this, undo](const QString &e) {
+            if (!e.isEmpty()) showError(e);
+            else {
+                memoryUndo_ = undo;
+                memoryLoaded();
+                if (memoryImportStatus_.isEmpty()) memoryImportStatus_ = QStringLiteral("Memory loaded. Undo Load restores the previous emulator memory.");
+                refreshImportStatus();
+            }
         });
         break;
+    }
     case PendingAction::SwitchThenLoad: {
         PendingAction load; load.kind = PendingAction::LoadMemory; load.data = a.data;
         switchModel(a.variant, [this, load] { confirm(load); });
@@ -851,7 +907,7 @@ void MainWindow::switchModel(int v, std::function<void()> then) {
     worker_->submit(this, [v](Machine &m) { m.switchModel(v); }, [this, then](const QString &err) {
         switching_ = false;
         if (err.isEmpty()) {
-            if (!Machine::isEnhanced16C152(fw_.images)) clearAllNotes(true);  // Multi/3-ROM: the switch cleared the memory, so the notes go too; E9E9 keeps it
+            if (!fw_.keepsModeMemory) clearAllNotes(true);  // Multi/3-ROM and unknown versions: the switch can clear memory, so the notes go too
             saveStateNow(true); if (then) then();
         }
         else showError(err);
@@ -902,26 +958,90 @@ void MainWindow::openMemoryFile(const QString &path) {
     offerMemory(data, QStringLiteral("“%1”").arg(name));
 }
 
-void MainWindow::offerMemory(const QByteArray &data, const QString &source) {
+void MainWindow::refreshImportStatus() {
+    const bool on = !memoryImportStatus_.isEmpty();
+    importLabel_->setText(memoryImportStatus_);
+    importLabel_->setToolTip(memoryImportStatus_);
+    undoLoad_->setVisible(canUndoMemoryImport());
+    importBar_->setVisible(on);
+    if (!on) return;
+    importBar_->setMaximumWidth(std::min(560, std::max(280, stack_->width() - 24)));
+    importBar_->adjustSize();
+    importBar_->move(12, stack_->height() - importBar_->height() - 12);
+    importBar_->raise();
+}
+
+bool MainWindow::canUndoMemoryImport() const {
+    return memoryUndo_ && memoryUndo_->firmwareId == fw_.id && memoryUndo_->variant == snap_.variant;
+}
+
+void MainWindow::chooseInspectorLayout(int layout) {
+    inspectorLayout_ = layout;
+    if (!worker_ || !running_) return;
+    worker_->submit(this, [layout](Machine &m) { m.calc.setMemory16Layout(Emulator::Memory16Layout(layout)); }, [](const QString &) {});
+}
+
+void MainWindow::setConnected16Layout(int layout) { connectedLayout_ = layout; }
+
+void MainWindow::undoMemoryImport() {
+    if (!canUndoMemoryImport() || !worker_) return;
+    const MemoryUndo previous = *memoryUndo_;
+    worker_->submit(this, [d = previous.data](Machine &m) { m.putMemory(d); }, [this, previous](const QString &err) {
+        if (!err.isEmpty()) { showError(err); return; }
+        doc_ = previous.doc;
+        notesPath_ = previous.notesPath;
+        memoryFileName_ = previous.memoryFile;
+        memoryFileCandidate_.clear();
+        pendingSidecar_.reset();
+        lastProgramKeys_.clear();
+        storeNotes();
+        QMap<int, QString> comments;
+        for (auto &c : doc_.comments) if (!c.orphaned) comments[c.step] = c.text;
+        inspector_->setComments(comments);
+        memoryUndo_.reset();
+        memoryImportStatus_ = QStringLiteral("Previous emulator memory restored. Original import file unchanged.");
+        refreshImportStatus();
+    });
+}
+
+void MainWindow::offerMemory(const QByteArray &data, const QString &source, int explicitLayout) {
+    const int target = fw_.mem16Layout;
+    if (snap_.variant == 160 && target == VC_MEM16_LEGACY_B3) {
+        showError(QStringLiteral("B3B3 has a legacy aliased pool, not the linear 176-slot layout. Host memory loading/conversion is unsupported; keep a raw backup and use a corrected firmware. Nothing was loaded."));
+        return;
+    }
     const QByteArray fw = firmwareData_;
     const int v = snap_.variant;
     const std::vector<int> imgs = fw_.images;
     const QString name = QStringLiteral("HP-") + model().name();
-    QThread *t = QThread::create([this, data, fw, v, imgs, name, source] {
-        // 16C memory layouts (standard 203 B / extended B7B7 = E8E8 / early E3E3): a trial load cannot see a mismatch
-        // (the firmware accepts the image, the registers just read wrong), so the structure is checked first.
+    QThread *t = QThread::create([this, data, fw, v, imgs, name, source, target, explicitLayout] {
         QByteArray img = data;
         QString src = source;
-        Emulator::LayoutCheck lay = Machine::layoutCheck(data, fw, v);
-        if (lay.verdict == 2) {
-            const QByteArray conv = Emulator::convertE3E3(data);
-            if (!conv.isEmpty()) { img = conv; src += QStringLiteral(" (converted from the early E3E3 layout)"); lay = Emulator::LayoutCheck(); }
+        QString note;
+        if (v == 160 && data.size() == Emulator::kMemorySize) {
+            try {
+                std::optional<Emulator::Memory16Layout> known;
+                if (explicitLayout == VC_MEM16_STD || explicitLayout == VC_MEM16_EXT || explicitLayout == VC_MEM16_LAYOUT206)
+                    known = Emulator::Memory16Layout(explicitLayout);
+                const Emulator::Memory16Import prepared = Emulator::prepareMemory16(data, Emulator::Memory16Layout(target), known);
+                img = prepared.data;
+                note = prepared.note;
+                if (prepared.converted) {
+                    const QString from = prepared.ambiguous ? QStringLiteral("compatible raw layouts") : QString::number(Emulator::memory16Slots(prepared.source));
+                    src += QStringLiteral(" (converted %1 → %2; original file unchanged)").arg(from).arg(Emulator::memory16Slots(Emulator::Memory16Layout(target)));
+                }
+            } catch (const Error &e) {
+                const QString message = e.message();
+                QMetaObject::invokeMethod(qApp, [this, guard = QPointer<MainWindow>(this), message] { if (guard) showError(message); }, Qt::QueuedConnection);
+                return;
+            }
         }
         Machine::MemoryCheck verdict = Machine::checkMemory(img, fw, v);
         std::vector<int> others;
         if (!verdict.fits()) { std::vector<int> among; for (int i : imgs) if (i != v) among.push_back(i); others = Machine::identifyMemory(img, fw, among); }
-        QMetaObject::invokeMethod(qApp, [this, guard = QPointer<MainWindow>(this), img, verdict, others, name, src, lay] {
+        QMetaObject::invokeMethod(qApp, [this, guard = QPointer<MainWindow>(this), img, verdict, others, name, src, note] {
             if (!guard) return;
+            if (!note.isEmpty()) { memoryImportStatus_ = note; refreshImportStatus(); }
             auto go = [&](const PendingAction &a) {
                 int r = prompts.confirm ? prompts.confirm(a) : 0;
                 if (r == 2) backupThenConfirm(a); else if (r == 1) confirm(a);
@@ -929,8 +1049,7 @@ void MainWindow::offerMemory(const QByteArray &data, const QString &source) {
             PendingAction a; a.data = img; a.source = src;
             switch (verdict.kind) {
             case Machine::MemoryCheck::Fits:
-                if (lay.verdict == 1) { a.kind = PendingAction::LoadMemoryAnyway; a.reason = lay.message; }
-                else a.kind = PendingAction::LoadMemory;
+                a.kind = PendingAction::LoadMemory;
                 go(a); break;
             case Machine::MemoryCheck::NeedsMoreMemory: {
                 QString m = QStringLiteral("It uses more registers than the %1 mode this firmware is running has (g MEM gives Error 10, and DIM (i) cannot fix it). "
@@ -1065,7 +1184,7 @@ ProgramDocumentContent MainWindow::documentContent(const InspectorSnapshot &s) {
     d.model = documentModelName();
     ProgramDocumentInfo info;
     info.modelName = documentModelName(); info.firmware = firmwareName_; info.memoryFile = memoryFileName_; info.model = s.model;
-    return ProgramDocumentContent(d, info, s.hasProgram ? s.program : std::vector<ProgramLine>{}, s.pool, s.setFlags());
+    return ProgramDocumentContent(d, info, s.hasProgram ? s.program : std::vector<ProgramLine>{}, s.pool, s.setFlags(), s.pool16);
 }
 
 void MainWindow::openProgramInfo() {
@@ -1216,7 +1335,11 @@ void MainWindow::readFromCalculator() {
     if (!running_ || linkBusy()) return;
     usbRun(QStringLiteral("Reading the calculator's memory…"), [this](CalculatorLink &l) {
         QByteArray d = l.readMemory();
-        return std::function<void()>([this, d] { memoryFileCandidate_.clear(); pendingSidecar_.reset(); offerMemory(d, QStringLiteral("the calculator")); });
+        return std::function<void()>([this, d] {
+            memoryFileCandidate_.clear(); pendingSidecar_.reset();
+            const int chosen = connectedLayout_;
+            offerMemory(d, QStringLiteral("the calculator"), chosen == VC_MEM16_NONE ? -1 : chosen);
+        });
     });
 }
 
@@ -1235,6 +1358,12 @@ void MainWindow::saveCalculatorMemoryToFile() {
 void MainWindow::writeToCalculator() {
     if (!hasMemoryFiles()) return stockUnavailable(QStringLiteral("Writing the emulator's memory to the real calculator"));
     if (!running_ || linkBusy()) return;
+    const int sourceLayout = fw_.mem16Layout, targetLayout = connectedLayout_;
+    auto physical = [](int l) { return l == VC_MEM16_STD || l == VC_MEM16_EXT || l == VC_MEM16_LAYOUT206; };
+    if (snap_.variant == 160 && (!physical(sourceLayout) || !physical(targetLayout))) {
+        showError(QStringLiteral("Before writing 16C memory, choose the connected calculator’s layout in Model → USB 16C layout, using its self-test code (EAEA: 206; B7B7/E9E9: 176). The USB protocol cannot report that version. Nothing was written."));
+        return;
+    }
     const QByteArray fw = firmwareData_;
     const std::vector<int> imgs = fw_.images.empty() ? std::vector<int>{snap_.variant} : fw_.images;
     const QString emu = QStringLiteral("HP-") + model().name();
@@ -1243,6 +1372,23 @@ void MainWindow::writeToCalculator() {
     worker_->submit(this, [st](Machine &m) { *st = m.savedState(true); }, [=](const QString &err) {
         setBusy({});
         if (!err.isEmpty()) return showError(err);
+        QByteArray payload = st->memory;
+        QString layoutNote;
+        if (st->variant == 160) {
+            const bool poolPair = (sourceLayout == VC_MEM16_EXT || sourceLayout == VC_MEM16_LAYOUT206)
+                && (targetLayout == VC_MEM16_EXT || targetLayout == VC_MEM16_LAYOUT206);
+            if (sourceLayout != targetLayout && poolPair) {
+                const QByteArray converted = Emulator::convertPool(payload, Emulator::Memory16Layout(sourceLayout), Emulator::Memory16Layout(targetLayout));
+                if (converted.isEmpty()) {
+                    showError(QStringLiteral("Cannot safely convert the emulator’s memory to the connected calculator’s layout. High data may not fit, or the calculator is active. Nothing was written."));
+                    return;
+                }
+                payload = converted;
+            }
+            layoutNote = QStringLiteral(" Layout: %1 → %2 slots; conversion if needed. Only the live mode is written.")
+                             .arg(Emulator::memory16Slots(Emulator::Memory16Layout(sourceLayout)))
+                             .arg(Emulator::memory16Slots(Emulator::Memory16Layout(targetLayout)));
+        }
         usbRun(QStringLiteral("Backing up the calculator's memory…"), [=](CalculatorLink &l) {
             QByteArray old = l.readMemory();
             auto fits = Machine::identifyMemory(old, fw, imgs);
@@ -1251,7 +1397,7 @@ void MainWindow::writeToCalculator() {
             QString backup = saveBackup(old, fits.empty() ? 0 : fits.front(), &why);
             if (backup.isEmpty()) throw Error(QStringLiteral("The calculator's current memory could not be backed up (%1), so nothing was written.").arg(why));
             return std::function<void()>([=] {
-                PendingWrite w; w.memory = st->memory; w.emulatorModel = emu; w.calculatorModels = fits; w.backup = backup; w.needs152 = big;
+                PendingWrite w; w.memory = payload; w.emulatorModel = emu; w.calculatorModels = fits; w.backup = backup; w.needs152 = big; w.layoutNote = layoutNote;
                 if (!prompts.confirmWrite || !prompts.confirmWrite(w)) return;
                 usbRun(QStringLiteral("Writing to the calculator…"), [=](CalculatorLink &l2) {
                     try {
@@ -1348,9 +1494,13 @@ void MainWindow::showAbout() {
     col->addWidget(t);
     QString body = QStringLiteral("<p style=\"color:gray\">Version %1 (Linux)</p>"
                                   "<p>A calculator app that emulates the ARM chip of the CE calculators and runs the firmware file you supply.</p>").arg(QStringLiteral(VOYAGERCALC_VERSION));
-    if (!firmwareName_.isEmpty())
+    if (!firmwareName_.isEmpty()) {
+        if (!fw_.identification.isEmpty())
+            body += QStringLiteral("<p><b>%1</b><br><span style=\"color:gray\">%2</span></p>")
+                        .arg(fw_.identification.toHtmlEscaped(), fw_.profileDetails.toHtmlEscaped().replace(QLatin1Char('\n'), QStringLiteral("<br>")));
         body += QStringLiteral("<p style=\"color:gray\">Firmware: %1<br>%2%3</p>").arg(firmwareName_.toHtmlEscaped(), fw_.info.toHtmlEscaped(),
                                                                                        fw_.checksum.isEmpty() ? QString() : QStringLiteral("<br>Checksum ") + fw_.checksum.toHtmlEscaped());
+    }
     if (isStock()) body += QStringLiteral("<hr><p><b>HP's original 12C firmware</b></p><p style=\"color:gray\">%1</p>").arg(kStockLimits.toHtmlEscaped());
     body += QStringLiteral("<hr><p>Copyright © 2026 José González Divassón. MIT License.</p>"
                            "<p style=\"color:gray\">%1</p>"

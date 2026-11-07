@@ -68,10 +68,12 @@ struct ProgramDocumentContent {
     std::vector<ProgramLine> lines;
     ProgramAnalysis analysis;
     std::optional<Pool15> pool;
+    std::optional<Pool16> pool16;
     std::vector<int> setFlags;
 
     ProgramDocumentContent(ProgramDocument d, ProgramDocumentInfo i, std::vector<ProgramLine> l,
-                           std::optional<Pool15> p = std::nullopt, std::vector<int> flags = {});
+                           std::optional<Pool15> p = std::nullopt, std::vector<int> flags = {},
+                           std::optional<Pool16> p16 = std::nullopt);
 
     struct LabelRow { QString label, notes, defined, called; };
     struct RegisterRow { QString reg, name, use, steps; };

@@ -204,7 +204,7 @@ typedef struct vc_value {
     char     text[72];      /* as the calculator would show it: integer in the current base
                                (HEX/DEC/OCT/BIN, no suffix), floats with all 10 digits */
     char     dec[32];       /* decimal: 16C integers per the complement mode; floats = text */
-    char     name[12];      /* "X", "LAST X", "I", "R0", "R.F", "R615", "PMT" ... */
+    char     name[12];      /* "X", "LAST X", "I", "R0", "R.F", "R615", "R720", "PMT" ... */
 } vc_value;
 
 /* Stack-like registers for vc_inspect_stack(). */
@@ -228,7 +228,7 @@ typedef struct vc_inspect_info {
     int      has_program;   /* vc_inspect_program() works for this model */
     int      ext_memory;    /* 16C Path-C extended memory */
     int      mem_layout;    /* 16C: VC_MEM16_* layout of the memory image (0 = not a 16C) */
-    int      pool_offset;   /* 16C: dump offset of the first pool register (0x6F0, 0x168, 0x170) */
+    int      pool_offset;   /* 16C: dump offset of the first pool register (0x6F0, 0x168, 0x170; 206 also 0x168) */
     int      reserved[4];
 } vc_inspect_info;
 int vc_inspect(vc_calc *c, vc_inspect_info *out);
@@ -291,19 +291,58 @@ int vc_inspect_program(vc_calc *c, int first, vc_prog_line *out, int max);
 
 
 /* --- 16C memory layouts (what a .16c / .bin16c image contains) ------------------------------
- * The 2 KB image has three 16C layouts. Same size, same extension, but the registers and the
- * program sit at different offsets, so an image from one layout read as another shows wrong or
- * empty registers (no error, the firmware accepts it):
+ * The 2 KB image has three 16C layouts the app loads automatically, plus two historical maps.
+ * Same size, same extension, but the registers and the program sit at different offsets, so an
+ * image from one layout read as another shows wrong or empty registers (no error, the firmware
+ * accepts it):
  *   VC_MEM16_STD        stock 16C memory: 29 registers (203 bytes) at 0x6F0. HP-16C CE firmware
  *                       without extended memory and the multi E6E6 (12C / 15.2 / 16C).
  *   VC_MEM16_EXT        Path-C extended memory: 176 registers (1232 bytes) at 0x168. The 16C CE
  *                       builds B5B5 / B7B7 and the multi E8E8 (identical layout: images move both ways).
  *   VC_MEM16_EXT_E3E3   the first multi with extended memory (E3E3): the same pool at 0x170
  *                       (8 bytes later). vc_memory_convert_e3e3() makes it VC_MEM16_EXT.
- *   VC_MEM16_ANY        (images only) nothing stored in the pool areas: fits every layout. */
-enum { VC_MEM16_NONE = 0, VC_MEM16_STD = 1, VC_MEM16_EXT = 2, VC_MEM16_EXT_E3E3 = 3, VC_MEM16_ANY = 4 };
+ *   VC_MEM16_LAYOUT206  EAEA and successor 206-slot pool at 0x168 (logical 2F..FC). R0–R720 at
+ *                       word size 16 with no program; 180 registers at word size 64.
+ *   VC_MEM16_ANY        (images only) nothing stored in the pool areas: fits every layout.
+ *   VC_MEM16_LEGACY_B3  B3B3's aliased pool. Not a linear map: inspection and host loading are off.
+ * Raw images have no reliable layout tag: stock and sparse layout206 may be identical.
+ * vc_memory_layout is the legacy structural guess, not proof of 176/206 compatibility.
+ * Modern callers must confirm the source layout before conversion/loading. */
+enum { VC_MEM16_NONE = 0, VC_MEM16_STD = 1, VC_MEM16_EXT = 2, VC_MEM16_EXT_E3E3 = 3, VC_MEM16_ANY = 4, VC_MEM16_LAYOUT206 = 5, VC_MEM16_LEGACY_B3 = 6 };
+/* Known firmware metadata; all records live in src/firmware_catalog.def.
+ * CE codes are checksums, not cryptographic identities: lookup additionally requires
+ * the exact embedded model set. No firmware or ROM bytes are in the catalogue. */
+enum { VC_FW_12C = 1, VC_FW_150 = 2, VC_FW_152 = 4, VC_FW_16C = 8 };
+typedef struct {
+    int checksum;
+    const char *display_name;
+    unsigned modes;
+    int mem16_layout;
+    int per_mode_slots;
+    int switch_menu;
+    int key120, key150, key152, key160;  /* matrix positions; -1 = unavailable */
+    const char *switch_method;
+    const char *notes;
+    const char *sources;
+} vc_firmware_profile;
+int vc_firmware_profile_count(void);
+const vc_firmware_profile *vc_firmware_profile_at(int index);
+const vc_firmware_profile *vc_firmware_known_profile(const vc_calc *c);
+
 /* Layout of the active 16C memory of the loaded firmware (VC_MEM16_NONE when 12C / 15C is active). */
 int vc_mem16_layout(const vc_calc *c);
+/* Read-only inspector override; NONE restores firmware detection. Does not change firmware. */
+int vc_set_mem16_layout(vc_calc *c, int layout);
+/* Explicit 176 <-> 206 (and stock / E3E3) paused image conversion. Atomic on refusal.
+ * Raw CM files have a constant validity magic, NOT a content/layout checksum.
+ * Masks use 1u<<VC_MEM16_*. Program-head evidence is an inference, not identity. */
+typedef struct {
+    unsigned candidates, program_heads, primary_candidates;
+    int magic_valid, pointers_valid, lines;
+    int upper_empty, gap_empty, stock_pool_empty; /* +6E8..<7D8, +6E8..<6F0, +6F0..<7D8 */
+} vc_mem16_analysis;
+int vc_memory_analyze16(const uint8_t mem[VC_MEMORY_SIZE], vc_mem16_analysis *out);
+int vc_memory_convert_pool(uint8_t mem[VC_MEMORY_SIZE], int source, int target);
 /* Same for the firmware file, whatever model is active (NONE: no 16C in it, e.g. the 12C-only images). */
 int vc_firmware_mem16(const vc_calc *c);
 /* Layout a 2 KB image appears to have (structural guess from where data sits; VC_MEM16_NONE when
