@@ -71,6 +71,13 @@ static void catalogue(void) {
     CHECK(by_code(0xE8)->mem16_layout == VC_MEM16_EXT && by_code(0xE8)->key160 == 5, "E8");
     CHECK(by_code(0xE9)->mem16_layout == VC_MEM16_EXT && by_code(0xE9)->per_mode_slots && by_code(0xE9)->key160 == 1 && by_code(0xE9)->key152 == 3, "E9");
     CHECK(by_code(0xEA)->mem16_layout == VC_MEM16_LAYOUT206 && by_code(0xEA)->per_mode_slots && by_code(0xEA)->key152 == 3, "EA");
+    CHECK(strcmp(by_code(0xEA)->display_name, "HP-16C Enhanced EAEA") == 0, "EA name %s", by_code(0xEA)->display_name);
+    CHECK(strstr(by_code(0xEA)->display_name, "TEST") == NULL, "EAEA is a release, not a test build");
+    CHECK(strstr(by_code(0xEA)->notes, "automatically") != NULL && strstr(by_code(0xEA)->notes, "Undo Load") != NULL, "EA notes %s", by_code(0xEA)->notes);
+    CHECK(strstr(by_code(0xEA)->notes, "explicit conversion") == NULL, "EA notes still say explicit conversion");
+    CHECK(strstr(by_code(0xEA)->sources, "HP16C-CE-enhanced-152-EAEA-guide.pdf") != NULL, "EA guide");
+    CHECK(strstr(by_code(0xEA)->sources, "HP16C-EAEA-HARDWARE-NOTES.md") != NULL, "EA hardware notes");
+    CHECK(strstr(by_code(0xB3)->display_name, "TEST") != NULL && strstr(by_code(0xB4)->display_name, "TEST") != NULL, "historical TEST names stay");
     CHECK(by_code(0xE9)->per_mode_slots && by_code(0xEA)->per_mode_slots, "slots");
     for (i = 0; i < 13; i++) {
         int ce = vc_firmware_profile_at(i)->checksum;

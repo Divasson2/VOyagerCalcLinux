@@ -20,7 +20,7 @@
     <span>macOS</span><span>Windows 10/11 x64 · arm64</span><span>Linux x86_64 · arm64</span>
   </div>
   <div class="cover-foot">
-    Free software, MIT licence · Test release, October 2026<br>
+    Free software, MIT licence · Version 0.7.6, November 2026<br>
     Calculator photographs (front and back) by Warren Young<br>
     <span class="small">Not affiliated with, endorsed by or sponsored by HP Inc. “HP” and the calculator model names belong to their owners.</span>
   </div>
@@ -50,13 +50,13 @@
 
 <div class="note"><b>No firmware is included.</b> Neither the app nor the source code contains HP firmware. You supply the firmware <code>.bin</code> file of your own calculator (about 112 KB). See <a href="#firmware">chapter 11</a> for where to get it. Using firmware is at your own responsibility.</div>
 
-<div class="warn"><b>Test release.</b> 0.7.6 is labelled a test release. USB reading and writing with a real calculator works in the author’s tests on Linux and on Windows 11 ARM (with a real HP-15C). The <b>Windows x64 build is untested on real hardware</b> (it passes the test suites and has been run only under emulation / wine). Please report problems on the GitHub project.</div>
+<div class="warn"><b>Hardware verification.</b> USB reading and writing with a real calculator has been checked by the author on Linux and Windows 11 ARM (with a real HP-15C). The <b>Windows x64 build has not been tested on real x64 hardware</b>. Automated test results and remaining limitations are listed in the release preparation report. Please report problems on the GitHub project.</div>
 
-<h3>What is new in 0.7.6</h3>
+<h3>What's new in 0.7.6</h3>
 <ul>
   <li><b>HP-16C CE Enhanced firmware EAEA</b> (206 register slots). The register inspector lists <b>R0–R720</b> at word size 16, and 180 registers at word size 64. The program listing and the memory-pool bar use the same layout.</li>
   <li><b>Firmware catalogue.</b> Thirteen known version codes (stock, Path-C, the 15C 3-ROM, Multi and Enhanced, including EAEA) choose the 16C memory layout, the model-switch keys and whether each mode keeps its own memory.</li>
-  <li><b>Automatic memory-layout detection.</b> Opening a 2 KB HP-16C memory file recognises stock (203 bytes), extended 176 slots (B5B5 / B7B7 / E9E9) and extended 206 slots (EAEA), and converts when that is safe. There is no layout dialog. The file format is unchanged: no layout tag, and the constant at byte +7F0 stays <code>AF5439FED967BC12</code>. A file that could be more than one layout (a blank image can) stays in the layout of the firmware you have open, and a short note says so. <b>Save Backup First</b> is still on the confirmation, and <b>Undo Load</b> on that note puts the emulator’s previous memory back. The <span class="menu">Model</span> menu is still how you choose 12C, 15C or 16C.</li>
+  <li><b>Automatic memory-layout detection.</b> Opening a 2 KB HP-16C memory file recognises stock (203 bytes), extended 176 slots (B5B5 / B7B7 / E9E9) and extended 206 slots (EAEA), and converts when that is safe. There is no layout dialog. The chip-13/14 window <code>+6E8..+7D7</code> is empty in 616 files, but some stock and 721 files are empty there too, so this is an inference rather than a unique signature. The file format is unchanged: no layout tag, and the constant at byte +7F0 stays <code>AF5439FED967BC12</code>. A file that could be more than one layout (a blank image can) stays in the layout of the firmware you have open, and a short note says so. <b>Save Backup First</b> is still on the confirmation, and <b>Undo Load</b> on that note puts the emulator’s previous memory back. The <span class="menu">Model</span> menu is still how you choose 12C, 15C or 16C.</li>
 </ul>
 <h3>What was new in 0.7.5</h3>
 <ul>

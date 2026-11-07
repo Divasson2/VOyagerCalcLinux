@@ -95,7 +95,7 @@ struct Pool16 {
         return layout == Emulator::Memory16Layout::Layout206 ? 0x0F : layout == Emulator::Memory16Layout::Standard ? 0 : 0x2D;
     }
     QString title() const { return Emulator::layoutTitle(layout); }
-    QString summary() const { return QStringLiteral("%1 slots / %2 bytes · program %3 slots · %4 registers at WS%5").arg(slotCount()).arg(dataBytes()).arg(programSlots()).arg(registers).arg(wordSize); }
+    QString summary() const { return QStringLiteral("%1 slots / %2 bytes, program %3 slots, %4 registers at WS%5").arg(slotCount()).arg(dataBytes()).arg(programSlots()).arg(registers).arg(wordSize); }
     QString range() const {
         const bool standard = layout == Emulator::Memory16Layout::Standard;
         const bool early = layout == Emulator::Memory16Layout::EarlyE3E3;
@@ -103,7 +103,7 @@ struct Pool16 {
         const int file = standard ? 0x6F0 : early ? 0x170 : 0x168;
         const int end = wide ? 0x7D7 : early ? 0x6EF : 0x6E7;
         auto hex = [](int v, int width) { return QStringLiteral("%1").arg(v, width, 16, QLatin1Char('0')).toUpper(); };
-        return QStringLiteral("Nut %1–FC; file +%2–+%3; remap −%4").arg(hex(floor(), 2), hex(file, 3), hex(end, 3), hex(remap(), 2));
+        return QStringLiteral("Nut %1-FC; file +%2-+%3; remap -%4").arg(hex(floor(), 2), hex(file, 3), hex(end, 3), hex(remap(), 2));
     }
     bool operator==(const Pool16 &o) const {
         return layout == o.layout && wordSize == o.wordSize && lines == o.lines && registers == o.registers;

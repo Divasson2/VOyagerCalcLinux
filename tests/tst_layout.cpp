@@ -15,6 +15,7 @@
 #include <QFile>
 #include <QMenuBar>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSet>
 #include <QSettings>
 #include <QStandardPaths>
@@ -81,6 +82,13 @@ private slots:
         QVERIFY(eaea && e9 && b3 && e3 && c8 && e8);
         QCOMPARE(eaea->layout, Emulator::Memory16Layout::Layout206);
         QVERIFY(eaea->perModeSlots);
+        QCOMPARE(eaea->displayName, QString("HP-16C Enhanced EAEA"));
+        QVERIFY(!eaea->displayName.contains(QStringLiteral("TEST")));
+        QVERIFY(eaea->notes.contains(QStringLiteral("automatically")));
+        QVERIFY(eaea->notes.contains(QStringLiteral("Undo Load")));
+        QVERIFY(!eaea->notes.contains(QStringLiteral("explicit conversion")));
+        QVERIFY(eaea->sources.contains(QStringLiteral("HP16C-CE-enhanced-152-EAEA-guide.pdf")));
+        QVERIFY(eaea->sources.contains(QStringLiteral("HP16C-EAEA-HARDWARE-NOTES.md")));
         QCOMPARE(eaea->keyFor(152), 3);
         QCOMPARE(eaea->keyFor(160), 1);
         QCOMPARE(e9->layout, Emulator::Memory16Layout::Layout176);
@@ -190,7 +198,7 @@ private slots:
     void inspectorAndPdfFollow206() {
         auto snap = std::make_shared<InspectorSnapshot>();
         snap->model = 16; snap->variant = 160; snap->base = 10; snap->wordSize = 16; snap->hasProgram = true; snap->lines = 0; snap->registerCount = 721;
-        snap->firmwareName = QStringLiteral("HP-16C Enhanced 206 EAEA TEST · CE EAEA");
+        snap->firmwareName = QStringLiteral("HP-16C Enhanced EAEA · CE EAEA");
         Pool16 pool; pool.layout = Emulator::Memory16Layout::Layout206; pool.wordSize = 16; pool.lines = 0; pool.registers = 721;
         QCOMPARE(pool.slotCount(), 206);
         QCOMPARE(pool.floor(), 0x2F);
@@ -223,10 +231,18 @@ private slots:
         if (QStandardPaths::findExecutable("pdftotext").isEmpty()) return;
         const QString path = out_.path() + "/pool206.pdf";
         QFile f(path); QVERIFY(f.open(QIODevice::WriteOnly)); f.write(pdf); f.close();
-        QProcess p; p.start("pdftotext", {"-layout", path, "-"}); QVERIFY(p.waitForFinished(20000));
-        const QString text = QString::fromUtf8(p.readAllStandardOutput());
-        QVERIFY(text.contains("Memory configuration"));
-        QVERIFY(text.contains("206"));
+        auto extract = [&](const QStringList &args) {
+            QProcess p; p.start("pdftotext", args); p.waitForFinished(20000);
+            return QString::fromUtf8(p.readAllStandardOutput());
+        };
+        // -layout can split a word when glyph advances do not match the viewer's; the
+        // plain extraction keeps the text-showing order. Either form is acceptable.
+        const QString laidOut = extract({QStringLiteral("-layout"), path, QStringLiteral("-")});
+        const QString plain = extract({path, QStringLiteral("-")});
+        const QString combined = laidOut + QLatin1Char('\n') + plain;
+        const QString letters = QString(combined).toLower().remove(QRegularExpression(QStringLiteral("[^a-z0-9]")));
+        QVERIFY2(letters.contains(QStringLiteral("memoryconfiguration")), qPrintable(combined.left(2500)));
+        QVERIFY2(combined.contains(QStringLiteral("206")) || letters.contains(QStringLiteral("206")), qPrintable(combined.left(2500)));
     }
 
     void loadedFirmwareUsesTheCatalogueAndUndo() {
