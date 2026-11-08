@@ -240,7 +240,8 @@ private slots:
         const QString laidOut = extract({QStringLiteral("-layout"), path, QStringLiteral("-")});
         const QString plain = extract({path, QStringLiteral("-")});
         const QString combined = laidOut + QLatin1Char('\n') + plain;
-        const QString letters = QString(combined).toLower().remove(QRegularExpression(QStringLiteral("[^a-z0-9]")));
+        // Poppler on arm64 extracts "fi" as U+FB01. NFKC splits that ligature before the letter check.
+        const QString letters = combined.normalized(QString::NormalizationForm_KC).toLower().remove(QRegularExpression(QStringLiteral("[^a-z0-9]")));
         QVERIFY2(letters.contains(QStringLiteral("memoryconfiguration")), qPrintable(combined.left(2500)));
         QVERIFY2(combined.contains(QStringLiteral("206")) || letters.contains(QStringLiteral("206")), qPrintable(combined.left(2500)));
     }
