@@ -102,8 +102,9 @@ QString InspectorSnapshot::descriptorText(const RegisterValue &v) const {
 bool InspectorSnapshot::operator==(const InspectorSnapshot &o) const {
     return model == o.model && variant == o.variant && base == o.base && wordSize == o.wordSize && complement == o.complement
         && flags == o.flags && programMode == o.programMode && running == o.running && line == o.line && lines == o.lines
-        && registerCount == o.registerCount && stack == o.stack && registers == o.registers && program == o.program
-        && pool == o.pool && imaginary == o.imaginary && matrices == o.matrices;
+        && registerCount == o.registerCount && firmwareName == o.firmwareName && firmwareDetails == o.firmwareDetails
+        && stack == o.stack && registers == o.registers && program == o.program
+        && pool == o.pool && pool16 == o.pool16 && imaginary == o.imaginary && matrices == o.matrices;
 }
 
 Pool15 pool15FromCore(const vc_pool15 &p) {
@@ -147,6 +148,15 @@ std::optional<InspectorSnapshot> inspect(Emulator &emu, bool includeProgram, int
     s.complement = info.complement; s.flags = info.flags; s.programMode = info.prgm_mode != 0; s.running = info.running != 0;
     s.line = info.line; s.lines = info.lines; s.registerCount = info.registers;
     s.hasI = info.has_i != 0; s.hasProgram = info.has_program != 0; s.extendedMemory = info.ext_memory != 0;
+    if (s.model == 16) {
+        const auto lay = Emulator::Memory16Layout(info.mem_layout);
+        if (lay == Emulator::Memory16Layout::Standard || lay == Emulator::Memory16Layout::Layout176
+            || lay == Emulator::Memory16Layout::EarlyE3E3 || lay == Emulator::Memory16Layout::Layout206) {
+            Pool16 p;
+            p.layout = lay; p.wordSize = s.wordSize; p.lines = s.lines; p.registers = s.registerCount;
+            s.pool16 = p;
+        }
+    }
     vc_value v{};
     std::vector<int> regs;
     if (s.model == 12) regs = {VC_REG_X, VC_REG_Y, VC_REG_Z, VC_REG_T, VC_REG_LASTX, VC_REG_FIN_N, VC_REG_FIN_I, VC_REG_FIN_PV, VC_REG_FIN_PMT, VC_REG_FIN_FV};

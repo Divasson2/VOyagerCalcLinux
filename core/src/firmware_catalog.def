@@ -1,0 +1,37 @@
+/* SPDX-License-Identifier: MIT
+ * Copyright (c) 2026 José González Divassón
+ *
+ * SINGLE SOURCE OF KNOWN-FIRMWARE DATA. Add a confirmed record here, then rebuild.
+ * FW(CE byte, display name, exact mode mask, 16C layout, per-mode slots (0/1),
+ *    service-menu number (0 = none), canonical selector matrix keys for
+ *    12C / 15.0 / 15.2 / 16C (-1 = absent), full human key sequence, notes, sources)
+ * Model mask: 12C=1, 15.0=2, 15.2=4, 16C=8. CE byte EA means ChE--EAEAh.
+ * Source filenames below identify local firmware documentation, not network dependencies.
+ * No ROM bytes or external font data. No undocumented version is inferred from its name.
+ * B3B3 intentionally has a distinct unsupported alias layout, not linear layout176.
+ */
+FW(0x0E, "HP-16C CE stock baseline", 8, VC_MEM16_STD, 0, 0, -1, -1, -1, -1, "No model switch (16C only).", "Closest documented original CE backup, not a provenance-certified factory download. Stock 29-slot / 203-byte pool.", "HP16C-CE-firmware-changes-from-stock.md §1–2")
+
+FW(0xBA, "HP-16C CE Thomas baseline", 8, VC_MEM16_STD, 0, 0, -1, -1, -1, -1, "No model switch (16C only).", "Small-memory Thomas/mute100 baseline; stock 29-slot / 203-byte geometry.", "HP16C-CE-firmware-changes-from-stock.md §1")
+
+FW(0xB3, "HP-16C Path-C B3B3 legacy TEST", 8, VC_MEM16_LEGACY_B3, 0, 0, -1, -1, -1, -1, "No model switch (16C only).", "176 physical pool slots, but legacy address aliasing: R157–R314 overlap lower registers at WS16. NOT the safe linear 176 layout. Register/program inspection and host memory loading are disabled; raw backups remain available.", "NOTES-B2B2-P9-FIX-B3B3.md; NOTES-B3B3-REG-BASE-B4B4.md")
+
+FW(0xB4, "HP-16C Path-C B4B4 TEST", 8, VC_MEM16_EXT, 0, 0, -1, -1, -1, -1, "No model switch; service menu 4 is a key tester.", "Linear 176-slot layout, logical floor 4D. Historical WS64 indirect-store top-byte defect; superseded by B5B5.", "NOTES-B3B3-REG-BASE-B4B4.md")
+
+FW(0xB5, "HP-16C Path-C B5B5", 8, VC_MEM16_EXT, 0, 0, -1, -1, -1, -1, "No model switch; service menu 4 is a key tester.", "Linear 176-slot / 1232-byte pool. Preserves the top byte for WS64 indirect stores.", "NOTES-B4B4-WS64-2D-B5B5.md")
+
+FW(0xB7, "HP-16C extended B7B7", 8, VC_MEM16_EXT, 0, 0, -1, -1, -1, -1, "No model switch; service menu 4 is a key tester.", "176-slot / 1232-byte pool; R0–R615 at WS16 with no program. Stopwatch trim4 / ENTER-show features.", "HP16C-CE-simple-guide-B7B7.md; PLAN-HP16C-ENHANCED-152.md findings")
+
+FW(0xC8, "HP-15C CE 3-ROM C8C8", 14, VC_MEM16_STD, 0, 4, -1, 1, 3, 5, "OFF; hold g + ENTER, press ON, release; 4; B/C = 15, D/E = 15.2, CHS/7 = 16.", "15.0 / 15.2 / stock-memory 16C. No per-mode memory slots; switching can clear user memory.", "HP15C-CE-simple-guide-C8C8.md §3–4; MULTI-STD16-FEATURES-PLAN.md (stock C8C8 16C geometry)")
+
+FW(0xE3, "HP-12C Multi extended E3E3", 13, VC_MEM16_EXT_E3E3, 0, 4, 1, -1, 3, 5, "OFF; hold g + ENTER, press ON, release; 4; i/PV = 12, PMT/FV = 15.2, CHS/7 = 16.", "Early 176-slot pool at file +170 (8 bytes later than B7B7/E8E8). Every mode selection clears memory.", "HP12C-CE-multi-152-ext16-E3E3-guide.md §3–4; INTERNAL-FIRMWARE-VERSION-HISTORY.md E8E8")
+
+FW(0xE5, "HP-12C Multi standard E5E5", 13, VC_MEM16_STD, 0, 4, 1, -1, 3, 5, "OFF; hold g + ENTER, press ON, release; 4; i/PV = 12, PMT/FV = 15.2, CHS/7 = 16.", "Stock 203-byte 16C pool; key filter, battery and stopwatch. Superseded by E6E6 battery-glyph correction. No per-mode slots.", "INTERNAL-FIRMWARE-VERSION-HISTORY.md E5E5–E6E6")
+
+FW(0xE6, "HP-12C Multi standard E6E6", 13, VC_MEM16_STD, 0, 4, 1, -1, 3, 5, "OFF; hold g + ENTER, press ON, release; 4; i/PV = 12, PMT/FV = 15.2, CHS/7 = 16.", "Stock 203-byte 16C pool. Every mode selection clears programs, registers and calculator settings.", "HP12C-CE-multi-152-std16-E6E6-guide.md §3–4")
+
+FW(0xE8, "HP-12C Multi extended E8E8", 13, VC_MEM16_EXT, 0, 4, 1, -1, 3, 5, "OFF; hold g + ENTER, press ON, release; 4; i/PV = 12, PMT/FV = 15.2, CHS/7 = 16.", "176-slot pool at +168, compatible with standalone B7B7 memory; unlike early E3E3. No per-mode slots; switching clears memory.", "INTERNAL-FIRMWARE-VERSION-HISTORY.md E8E8; PLAN-HP16C-ENHANCED-152.md findings")
+
+FW(0xE9, "HP-16C Enhanced E9E9", 12, VC_MEM16_EXT, 1, 4, -1, -1, 3, 1, "OFF; hold g + ENTER, press ON, release; 4; B/C = 16, D/E = 15.2.", "16C 176-slot pool + 15.2; separate SRAM memory slots. Boots into 16C after reset; USB sees only the live mode.", "HP16C-CE-enhanced-152-E9E9-guide.md §2–4; INTERNAL-FIRMWARE-VERSION-HISTORY.md E9E9")
+
+FW(0xEA, "HP-16C Enhanced EAEA", 12, VC_MEM16_LAYOUT206, 1, 4, -1, -1, 3, 1, "OFF; hold g + ENTER, press ON, release; 4; B/C = 16, D/E = 15.2.", "206-slot / 1442-byte pool. R0–R720 at WS16 with no program (180 registers at WS64). Separate SRAM mode slots, 16C generation 2. Older 176-slot memory files are detected and converted automatically on load; Undo Load restores the previous emulator memory.", "HP16C-CE-enhanced-152-EAEA-guide.pdf; HP16C-EAEA-HARDWARE-NOTES.md")

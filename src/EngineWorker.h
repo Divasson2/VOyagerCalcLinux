@@ -20,7 +20,10 @@ namespace vc {
 /// What the UI needs to know about the firmware that is running.
 struct FirmwareDetails {
     QString id, info, checksum;
+    QString identification, profileDetails;
     int family = 0;
+    int mem16Layout = VC_MEM16_NONE;     // physical 16C layout of the firmware, not the inspector override
+    bool keepsModeMemory = false;
     unsigned capabilities = 0;
     std::vector<int> images;
     bool stock() const { return family == VC_FAMILY_STOCK; }

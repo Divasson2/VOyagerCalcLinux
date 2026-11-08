@@ -4,7 +4,7 @@
 # VoyagerCalc for Linux: Qt 6 front end around the C emulator core in core/.
 # Build:  cmake -S . -B build -G Ninja [-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64] && cmake --build build
 cmake_minimum_required(VERSION 3.21)
-project(VoyagerCalc VERSION 0.7.5 LANGUAGES C CXX)
+project(VoyagerCalc VERSION 0.7.6 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -91,7 +91,10 @@ function(vc_test name)
     set_target_properties(tst_${name} PROPERTIES WIN32_EXECUTABLE OFF)
   endif()
 endfunction()
-set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app selftest speed matrix manz calcactions)
+set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app selftest speed matrix manz calcactions layout)
+add_executable(test_layout206 core/tests/test_layout206.c)
+target_link_libraries(test_layout206 PRIVATE voyagercore)
+add_test(NAME layout206 COMMAND test_layout206)
 if(NOT WIN32)
   list(APPEND VC_TESTS usb)            # hidraw / udev / sysfs: Linux only
 endif()

@@ -52,9 +52,28 @@ QColor poolColour(const Pool15::Segment &s) {
     }
 }
 
-QString firstFamily(const QStringList &wanted, const QString &fallback) {
+// A real "Bold" face. setBold() on a family that has none synthesizes the weight, and
+// QPdfWriter then paints a second copy under an empty ActualText span. Poppler on
+// aarch64 (Debian 13, Qt 6.8) drops that line, so "Memory configuration" never reaches pdftotext.
+QString boldStyleName(const QString &family) {
+    for (const QString &s : QFontDatabase::styles(family))
+        if (s.compare(QLatin1String("Bold"), Qt::CaseInsensitive) == 0 && !QFontDatabase::italic(family, s)) return s;
+    return {};
+}
+QString actualFamily(const QStringList &have, const QString &wanted) {
+    for (const QString &h : have) if (h.compare(wanted, Qt::CaseInsensitive) == 0) return h;
+    return {};
+}
+QString firstFamily(const QStringList &wanted, const QString &fallback, bool needBold) {
     const QStringList have = QFontDatabase::families();
-    for (const QString &w : wanted) if (have.contains(w, Qt::CaseInsensitive)) return w;
+    for (const QString &w : wanted) {
+        const QString fam = actualFamily(have, w);
+        if (!fam.isEmpty() && (!needBold || !boldStyleName(fam).isEmpty())) return fam;
+    }
+    if (needBold && !boldStyleName(fallback).isEmpty()) return fallback;
+    if (needBold)
+        for (const QString &h : have)
+            if (!boldStyleName(h).isEmpty()) return h;
     return fallback;
 }
 
@@ -76,10 +95,11 @@ public:
         dev_.setResolution(72);
         dev_.setTitle(c.title());
         dev_.setCreator(QStringLiteral("VoyagerCalc"));
-        QStringList sans{"Helvetica", "Arial", "Liberation Sans", "DejaVu Sans", "Noto Sans", "Open Sans", "Roboto"};
-        QStringList mono{"Courier New", "Courier", "Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", "Roboto Mono"};
-        sans_ = firstFamily(sans, QFontDatabase::systemFont(QFontDatabase::GeneralFont).family());
-        mono_ = firstFamily(mono, QFontDatabase::systemFont(QFontDatabase::FixedFont).family());
+        QStringList sans{"Liberation Sans", "DejaVu Sans", "Noto Sans", "Arial", "Helvetica", "Open Sans", "Roboto"};
+        QStringList mono{"Liberation Mono", "DejaVu Sans Mono", "Noto Sans Mono", "Courier New", "Courier", "Roboto Mono"};
+        // Prefer a family that has a real Bold face so headings stay text, not a synthesized outline.
+        sans_ = firstFamily(sans, QFontDatabase::systemFont(QFontDatabase::GeneralFont).family(), true);
+        mono_ = firstFamily(mono, QFontDatabase::systemFont(QFontDatabase::FixedFont).family(), true);
     }
 
     QByteArray run() {
@@ -113,17 +133,20 @@ private:
     // ---- drawing primitives (recorded per page)
     using Op = std::function<void(QPainter &)>;
     QFont font(const Style &s) const {
-        QFont f;
-        switch (s.role) {
-        case Role::Regular: f.setFamily(sans_); break;
-        case Role::Bold: f.setFamily(sans_); f.setBold(true); break;
-        case Role::Mono: f.setFamily(mono_); break;
-        case Role::MonoBold: f.setFamily(mono_); f.setBold(true); break;
-        case Role::Display: f.setFamily(fonts_.display); break;
-        case Role::Keys: f.setFamily(fonts_.keys); break;
+        const bool bold = s.role == Role::Bold || s.role == Role::MonoBold;
+        QString family = sans_;
+        if (s.role == Role::Mono || s.role == Role::MonoBold) family = mono_;
+        else if (s.role == Role::Display) family = fonts_.display;
+        else if (s.role == Role::Keys) family = fonts_.keys;
+        QFont f(family);
+        if (bold) {
+            const QString style = boldStyleName(family);
+            if (!style.isEmpty()) f.setStyleName(style);   // real Bold face; do not synthesize
         }
         f.setPointSizeF(s.size);
-        f.setStyleStrategy(QFont::PreferDefault);
+        // NoFontMerging keeps one font engine. A merged engine is not valid PDF text
+        // (Qt asserts and then emits no glyphs), which drops the whole string.
+        f.setStyleStrategy(QFont::StyleStrategy(int(QFont::PreferOutline) | int(QFont::NoFontMerging)));
         return f;
     }
     double width(const QString &s, const Style &st) const { return QFontMetricsF(font(st), const_cast<QPdfWriter *>(&dev_)).horizontalAdvance(s); }
@@ -294,7 +317,7 @@ private:
 
     void memory() {
         auto rows = c_.memoryRows();
-        if (rows.empty() || !c_.pool) return;
+        if (rows.empty()) return;
         heading(QStringLiteral("Memory configuration"));
         Style k(Role::Regular, 9, kGrey), v(Role::Regular, 9.5, kInk);
         for (auto &[a, b] : rows) {
@@ -304,6 +327,20 @@ private:
             for (int i = 0; i < w.size(); ++i) text(w[i], left + 100, y + 9.5 + i * 12.5, v);
             y += w.size() * 12.5;
         }
+        if (c_.pool16) {
+            const Pool16 &p = *c_.pool16;
+            need(40);
+            y += 6;
+            const double slotTotal = std::max(1, p.slotCount());
+            const double w = contentWidth() * p.availableSlots() / slotTotal;
+            fill(left, y, w, 10, QColor(0x4CBF6B));
+            if (w < contentWidth()) fill(left + w, y, contentWidth() - w, 10, QColor(0xE3A33B));
+            y += 24;
+            text(QStringLiteral("Storage capacity / program (not nonzero-register usage)"), left, y, k);
+            y += 12;
+            return;
+        }
+        if (!c_.pool) return;
         need(40);
         y += 6;
         auto segs = c_.pool->segments();

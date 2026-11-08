@@ -13,7 +13,7 @@ over USB (`hidraw` on Linux, the standard Windows HID driver on Windows).
 * Licence: [MIT](LICENSE). Not affiliated with, endorsed by or sponsored by HP Inc.; "HP" and the calculator model names
   belong to their owners.
 
-> Status: version 0.7.5, a test release. Reading and writing the calculator's memory over USB works with a real calculator on both
+> Status: version 0.7.6, a test release. HP-16C memory files are detected automatically (stock, 176-slot extended, and the 206-slot EAEA layout, R0–R720). Reading and writing the calculator's memory over USB works with a real calculator on both
 > platforms in the author's tests: Linux, and Windows (tested on Windows 11 ARM with a real HP-15C). The Windows x64 build has been tested
 > under wine only, with a fake HID device. Reports from other systems and calculators are welcome.
 

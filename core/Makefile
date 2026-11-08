@@ -5,9 +5,9 @@ CPPFLAGS += -Iinclude -D_POSIX_C_SOURCE=200809L
 SRC     = src/cpu.c src/machine.c src/sha256.c src/inspect.c
 OBJ     = $(SRC:src/%.c=build/%.o)
 
-all: build/libvoyagercore.a build/vcore build/test_lcd build/test_multi build/test_inspect build/test_pool15 build/test_mem16 build/test_matrix15 build/test_firmware
+all: build/libvoyagercore.a build/vcore build/test_lcd build/test_multi build/test_inspect build/test_pool15 build/test_mem16 build/test_layout206 build/test_matrix15 build/test_firmware
 
-build/%.o: src/%.c src/cpu.h src/sha256.h src/internal.h src/optables.h include/voyager_core.h | build
+build/%.o: src/%.c src/cpu.h src/sha256.h src/internal.h src/optables.h src/firmware_catalog.def include/voyager_core.h | build
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 build/libvoyagercore.a: $(OBJ)
 	ar rcs $@ $^
@@ -16,6 +16,8 @@ build/test_multi: tests/test_multi.c build/libvoyagercore.a
 build/test_inspect: tests/test_inspect.c build/libvoyagercore.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/libvoyagercore.a -lm -o $@
 build/test_mem16: tests/test_mem16.c build/libvoyagercore.a
+	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/libvoyagercore.a -o $@
+build/test_layout206: tests/test_layout206.c build/libvoyagercore.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/libvoyagercore.a -o $@
 build/test_pool15: tests/test_pool15.c build/libvoyagercore.a
 	$(CC) $(CPPFLAGS) $(CFLAGS) $< build/libvoyagercore.a -lm -o $@

@@ -156,10 +156,11 @@ QString ProgramDocumentInfo::modelNameFor(int variant, int model) {
 QString ProgramDocumentInfo::dateText() const { return QLocale(QLocale::English, QLocale::UnitedKingdom).toString(date, QStringLiteral("d MMMM yyyy")); }
 
 ProgramDocumentContent::ProgramDocumentContent(ProgramDocument d, ProgramDocumentInfo i, std::vector<ProgramLine> l,
-                                               std::optional<Pool15> p, std::vector<int> flags)
+                                               std::optional<Pool15> p, std::vector<int> flags, std::optional<Pool16> p16)
     : doc(std::move(d)), info(std::move(i)), lines(std::move(l)), setFlags(std::move(flags)) {
     analysis = ProgramAnalysis(lines, info.model);
     if (info.model == 15) pool = p;
+    if (info.model == 16) pool16 = std::move(p16);
 }
 
 QString ProgramDocumentContent::title() const {
@@ -174,6 +175,14 @@ QString ProgramDocumentContent::steps(const std::vector<int> &s) const {
 
 std::vector<std::pair<QString, QString>> ProgramDocumentContent::memoryRows() const {
     std::vector<std::pair<QString, QString>> r;
+    if (pool16) {
+        const Pool16 &p = *pool16;
+        r.push_back({u("16C layout"), p.title()});
+        r.push_back({u("Shared pool"), p.summary()});
+        r.push_back({u("Address range"), p.range()});
+        r.push_back({u("Fixed tail"), u("FD: I; FE: program boundary / I high; FF: current line")});
+        return r;
+    }
     if (!pool) return r;
     const Pool15 &p = *pool;
     QString last = p.dimI < 10 ? QStringLiteral("R%1").arg(p.dimI) : p.dimI < 20 ? QStringLiteral("R.%1").arg(p.dimI - 10) : QStringLiteral("R%1").arg(p.dimI);

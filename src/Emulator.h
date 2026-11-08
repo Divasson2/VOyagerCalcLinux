@@ -10,6 +10,8 @@
 #include <QString>
 #include <array>
 #include <cstdint>
+#include <map>
+#include <optional>
 #include <stdexcept>
 #include <vector>
 
@@ -73,6 +75,52 @@ public:
     LayoutCheck precheckMemory(const QByteArray &mem) const;
     /// The image in the layout of B7B7 / E8E8 (pool 8 bytes earlier), or an empty array when it is not in the E3E3 layout.
     static QByteArray convertE3E3(const QByteArray &mem);
+
+    /// Physical 16C maps. Automatic is the running firmware (VC_MEM16_NONE as an override).
+    enum class Memory16Layout {
+        Automatic = VC_MEM16_NONE, Standard = VC_MEM16_STD, Layout176 = VC_MEM16_EXT, EarlyE3E3 = VC_MEM16_EXT_E3E3,
+        Any = VC_MEM16_ANY, Layout206 = VC_MEM16_LAYOUT206, LegacyB3 = VC_MEM16_LEGACY_B3
+    };
+    static QString layoutTitle(Memory16Layout l);
+    static int memory16Slots(Memory16Layout l);
+
+    /// One row of firmware_catalog.def. The CE code is a checksum plus the exact model set, not a signature.
+    struct KnownFirmware {
+        int checksum = -1;
+        QString code, displayName, switchMethod, notes, sources;
+        std::vector<int> variants;
+        Memory16Layout layout = Memory16Layout::Automatic;
+        bool perModeSlots = false;
+        int switchMenu = 0;
+        std::map<int, int> switchKeys;
+        int keyFor(int variant) const;
+        QString modeNames() const;
+    };
+    std::optional<KnownFirmware> knownFirmware() const;
+    static std::vector<KnownFirmware> knownFirmwareCatalogue();
+    QString firmwareIdentification() const;
+    QString firmwareProfileDetails() const;
+    Memory16Layout memory16Layout() const;
+    Memory16Layout firmwareMemory16Layout() const;
+    void setMemory16Layout(Memory16Layout layout);          // inspector decoding only
+
+    struct Memory16Analysis {
+        bool magicValid = false, pointersValid = false, upperWindowEmpty = false, gapEmpty = false, stockPoolEmpty = false;
+        int lines = 0;
+        std::vector<Memory16Layout> candidates, programHeads, evidence;
+    };
+    struct Memory16Import {
+        QByteArray data;
+        Memory16Layout source = Memory16Layout::Automatic;
+        bool converted = false, ambiguous = false;
+        QString note;
+    };
+    static Memory16Analysis analyzeMemory16(const QByteArray &data);
+    /// Empty when the conversion is refused. The source array is never rewritten.
+    static QByteArray convertPool(const QByteArray &mem, Memory16Layout from, Memory16Layout to);
+    /// Automatic stock / 176 / 206 import. knownSource is the connected calculator's self-test, when the user set one.
+    /// Throws when the only reading cannot be converted without losing data.
+    static Memory16Import prepareMemory16(const QByteArray &data, Memory16Layout target, std::optional<Memory16Layout> knownSource = std::nullopt);
 
     int family() const { return vc_firmware_family(c_); }    // VC_MODEL_* / VC_FAMILY_*
     unsigned capabilities() const { return vc_capabilities(c_); }
