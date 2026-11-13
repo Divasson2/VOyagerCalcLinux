@@ -68,18 +68,18 @@ public:
 
     QByteArray saveMemory();                                 // throws, 2 KB
     void loadMemory(const QByteArray &mem);                  // throws
-    /// Structural check of a 2 KB image against the active 16C memory layout (standard 203 B, extended
-    /// B7B7 = E8E8, early E3E3): verdict 0 = fine, 1 = warn (another layout: it would read wrong), 2 = convert
-    /// (an E3E3 image: Emulator::convertE3E3 fixes it). A trial load cannot see this mismatch.
+    /// Structural check of a 2 KB image against the active 16C memory layout (stock 203 B or 206 slots; 0.7.7):
+    /// verdict 0 = fine, 1 = warn (the other layout: it would read wrong), 3 = the firmware's 16C pool is
+    /// unsupported or not chosen yet. A trial load cannot see this mismatch.
     struct LayoutCheck { int verdict = 0; QString message; };
     LayoutCheck precheckMemory(const QByteArray &mem) const;
-    /// The image in the layout of B7B7 / E8E8 (pool 8 bytes earlier), or an empty array when it is not in the E3E3 layout.
-    static QByteArray convertE3E3(const QByteArray &mem);
 
-    /// Physical 16C maps. Automatic is the running firmware (VC_MEM16_NONE as an override).
+    /// Physical 16C maps (0.7.7: only stock and 206 slots). Automatic is the running firmware (VC_MEM16_NONE as an
+    /// override). Unsupported: a known firmware whose pool is neither (B3B3, retired builds); Undetermined: an
+    /// unknown extended ROM, where the user chooses stock or 206.
     enum class Memory16Layout {
-        Automatic = VC_MEM16_NONE, Standard = VC_MEM16_STD, Layout176 = VC_MEM16_EXT, EarlyE3E3 = VC_MEM16_EXT_E3E3,
-        Any = VC_MEM16_ANY, Layout206 = VC_MEM16_LAYOUT206, LegacyB3 = VC_MEM16_LEGACY_B3
+        Automatic = VC_MEM16_NONE, Standard = VC_MEM16_STD, Any = VC_MEM16_ANY, Layout206 = VC_MEM16_LAYOUT206,
+        Unsupported = VC_MEM16_UNSUPPORTED, Undetermined = VC_MEM16_UNDETERMINED
     };
     static QString layoutTitle(Memory16Layout l);
     static int memory16Slots(Memory16Layout l);
@@ -102,7 +102,7 @@ public:
     QString firmwareProfileDetails() const;
     Memory16Layout memory16Layout() const;
     Memory16Layout firmwareMemory16Layout() const;
-    void setMemory16Layout(Memory16Layout layout);          // inspector decoding only
+    void setMemory16Layout(Memory16Layout layout);          // user's choice: Automatic, Standard or Layout206
 
     struct Memory16Analysis {
         bool magicValid = false, pointersValid = false, upperWindowEmpty = false, gapEmpty = false, stockPoolEmpty = false;
@@ -118,7 +118,7 @@ public:
     static Memory16Analysis analyzeMemory16(const QByteArray &data);
     /// Empty when the conversion is refused. The source array is never rewritten.
     static QByteArray convertPool(const QByteArray &mem, Memory16Layout from, Memory16Layout to);
-    /// Automatic stock / 176 / 206 import. knownSource is the connected calculator's self-test, when the user set one.
+    /// Automatic stock / 206 import. knownSource is the connected calculator's self-test, when the user set one.
     /// Throws when the only reading cannot be converted without losing data.
     static Memory16Import prepareMemory16(const QByteArray &data, Memory16Layout target, std::optional<Memory16Layout> knownSource = std::nullopt);
 

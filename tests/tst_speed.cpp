@@ -3,8 +3,11 @@
 // Speed of the engine thread: the calculator always runs in real time (10 ms of calculator time per 10 ms of wall
 // time; the Turbo mode was removed in 0.7.1). Measured idle (the firmware sleeps) and busy (a 300-pass count-down
 // program at the firmware's default 4 MHz clock). Needs a 15C firmware; prints the ratios.
+// 0.7.7: at the firmware's 48 MHz setting the CPU is not throttled to the 48 MHz instruction budget: a busy slice
+// runs on at host speed (VC_UNTHROTTLED_48MHZ_US per 10 ms), while the 10 ms tick and the idle firmware stay real time.
 #include "TestSupport.h"
 #include "EngineWorker.h"
+#include "Model.h"
 #include <QElapsedTimer>
 #include <QSignalSpy>
 #include <QThread>
@@ -76,6 +79,57 @@ private slots:
         qInfo("busy: %.2fx real time", r);
         QVERIFY(r > 0.85 && r < 1.15);
         QTest::qWait(3500);                   // let the program end
+    }
+    // digits then GSB A of the count-down program keyed in by runCountdown(); wall ms until it stops
+    qint64 runPasses(const std::vector<int> &digits) {
+        w_->performAndWait([&](Machine &m) { for (int k : digits) m.tap(k); });
+        QElapsedTimer t; t.start();
+        w_->post([w = w_] { w->pressKey(21); w->releaseLater({21}, 150); });
+        QTest::qWait(60);
+        w_->post([w = w_] { w->pressKey(0); w->releaseLater({0}, 150); });
+        QString text;
+        while (t.elapsed() < 60000) {
+            QTest::qWait(10);
+            w_->performAndWait([&](Machine &m) { text = m.calc.displayText(); });
+            if (t.elapsed() > 120 && text.trimmed().startsWith(QLatin1String("0.0000"))) break;
+        }
+        return t.elapsed() - 60;
+    }
+    void at48MHzProgramsRunUnthrottled() {
+        // the firmware's own speed setting: g-ENTER-ON, 5 shows 4, then 12, then 48; ON leaves
+        QString shown;
+        for (QElapsedTimer t0 = [] { QElapsedTimer e; e.start(); return e; }(); t0.elapsed() < 10000; QTest::qWait(50)) {
+            w_->performAndWait([&](Machine &m) { shown = m.calc.displayText().trimmed(); });
+            if (shown.startsWith(QLatin1String("0.0000"))) break;      // the previous test's program has ended
+        }
+        w_->performAndWait([&](Machine &m) {
+            m.perform(KeyChord::ServiceMenu);
+            for (int i = 0; i < 3; ++i) { m.tap(Emulator::keyCode(15, "5")); shown = m.calc.displayText().trimmed(); }
+            m.tap(30); m.run(1000);
+        });
+        QCOMPARE(shown, QStringLiteral("48"));
+        const std::vector<int> passes3000 = {28, 36, 36, 36};
+        w_->performAndWait([](Machine &m) { QVERIFY(vc_unthrottled_48mhz(m.calc.handle()) == VC_UNTHROTTLED_48MHZ_US); vc_set_unthrottled_48mhz(m.calc.handle(), 0); });
+        const int sim0 = simMs();
+        const qint64 throttled = runPasses(passes3000);
+        const double keptUp = double(simMs() - sim0) / double(std::max<qint64>(1, throttled + 60));
+        w_->performAndWait([](Machine &m) { vc_set_unthrottled_48mhz(m.calc.handle(), VC_UNTHROTTLED_48MHZ_US); });
+        const qint64 unthrottled = runPasses(passes3000);
+        double idle = ratio(1500);
+        qInfo("48 MHz, 3000-pass program: throttled (0.7.7 before) %lld ms, unthrottled %lld ms (%.1fx); idle %.2fx real time",
+              throttled, unthrottled, double(throttled) / double(std::max<qint64>(1, unthrottled)), idle);
+        // a host that cannot even run the 48 MHz budget in real time (e.g. an arm64 build under qemu) has no spare speed
+        if (keptUp < 0.9) {
+            qInfo("host keeps only %.2fx real time at the 48 MHz budget: no headroom to measure", keptUp);
+        } else
+        QVERIFY2(unthrottled < throttled * 3 / 4, qPrintable(QString("%1 vs %2").arg(unthrottled).arg(throttled)));
+        QVERIFY(idle > 0.85 && idle < 1.15);              // the idle firmware and its timers keep real time at 48 MHz
+        w_->performAndWait([&](Machine &m) {                 // back to 4 MHz for any later test (48 -> 4)
+            m.perform(KeyChord::ServiceMenu);
+            for (int i = 0; i < 2; ++i) { m.tap(Emulator::keyCode(15, "5")); shown = m.calc.displayText().trimmed(); }
+            m.tap(30); m.run(1000);
+        });
+        QCOMPARE(shown, QStringLiteral("4"));
     }
 private:
     qint64 normalMs_ = 0;

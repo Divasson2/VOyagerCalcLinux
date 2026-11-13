@@ -67,11 +67,11 @@ private slots:
         QCOMPARE(d.registers.size(), qsizetype(a.registers.size()));
     }
 
-    void millerRabin16C() {
+    void program16C() {                     // 0.7.7: the stock pi program (90 lines) on the stock 16C
         QByteArray fw = vct::firmware16();
         VC_REQUIRE(fw, "16C");
         Machine m; m.loadFirmware(fw); m.boot(nullptr);
-        m.putMemory(vct::fixture("miller-rabin-ext-ready.16c"));
+        m.putMemory(vct::fixture("pi-1010-ready.16c"));
         auto s = inspect(m.calc, true);
         QVERIFY(s && s->program.size() > 50);
         ProgramAnalysis a(s->program, 16);

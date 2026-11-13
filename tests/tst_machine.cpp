@@ -25,7 +25,7 @@ class TstMachine : public QObject {
     }
     template <typename F> void each(F body) {
         bool any = false;
-        const QPair<QByteArray, const char *> all[] = {{vct::firmware16(), "B7B7"}, {vct::firmware15(), "C8C8"}, {vct::firmwareMulti(), "E3E3"}};
+        const QPair<QByteArray, const char *> all[] = {{vct::firmware206(), "EAEA"}, {vct::firmware15(), "C8C8"}, {vct::firmwareMulti(), "E3E3"}};
         for (auto &p : all) if (!p.first.isEmpty()) { any = true; auto m = machine(p.first); body(*m, p.second); }
         if (!any) QSKIP("no firmware (set VOYAGERCALC_FIRMWARE_DIR)");
     }
@@ -99,7 +99,7 @@ private slots:
         for (auto [v, keeps] : cases) QVERIFY2(switchKeepsR1(*m, v) == keeps, qPrintable(QString("to %1").arg(v)));
     }
     void singleImageCannotSwitch() {
-        auto fw = vct::firmware16(); VC_REQUIRE(fw, "B7B7");
+        auto fw = vct::firmware16(); VC_REQUIRE(fw, "stock 16C");
         auto m = machine(fw);
         QVERIFY(!m->canSwitchModel());
         QVERIFY_THROWS_EXCEPTION(vc::Error, m->switchModel(150));
@@ -120,7 +120,7 @@ private slots:
         QVERIFY2(m2.displayText().toUpper().contains("ABC"), qPrintable(m2.displayText()));
     }
     void stateOfAnotherFirmwareIsIgnored() {
-        auto fw = vct::firmware16(); VC_REQUIRE(fw, "B7B7");
+        auto fw = vct::firmware16(); VC_REQUIRE(fw, "stock 16C");
         Machine m; m.loadFirmware(fw);
         SavedState s; s.memory = QByteArray(2048, 0); s.variant = 160; s.firmwareId = "not-this-one";
         QVERIFY(!m.boot(&s).isEmpty() || true);       // a note, never an exception

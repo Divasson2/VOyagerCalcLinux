@@ -1,0 +1,35 @@
+// SPDX-License-Identifier: MIT
+#pragma code_page(65001)
+// Copyright (c) 2026 José González Divassón
+// Windows resources: the program icon and the version information shown in the file's Properties.
+// Generated at configure time from PROJECT_VERSION (@PROJECT_VERSION@) so the resource cannot drift.
+#include <winver.h>
+1 ICON "@VC_WIN_ICON@"
+VS_VERSION_INFO VERSIONINFO
+ FILEVERSION @VC_FILEVERSION_CSV@
+ PRODUCTVERSION @VC_FILEVERSION_CSV@
+ FILEFLAGSMASK 0x3fL
+ FILEFLAGS 0x0L
+ FILEOS VOS_NT_WINDOWS32
+ FILETYPE VFT_APP
+ FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+  BLOCK "StringFileInfo"
+  BEGIN
+    BLOCK "040904b0"
+    BEGIN
+      VALUE "CompanyName", "José González Divassón"
+      VALUE "FileDescription", "VoyagerCalc - HP Voyager calculator emulator"
+      VALUE "FileVersion", "@PROJECT_VERSION@"
+      VALUE "InternalName", "voyagercalc"
+      VALUE "LegalCopyright", "Copyright (c) 2026 José González Divassón, MIT License"
+      VALUE "OriginalFilename", "voyagercalc.exe"
+      VALUE "ProductName", "VoyagerCalc"
+      VALUE "ProductVersion", "@PROJECT_VERSION@"
+    END
+  END
+  BLOCK "VarFileInfo"
+  BEGIN
+    VALUE "Translation", 0x409, 1200
+  END
+END

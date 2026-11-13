@@ -437,14 +437,14 @@ void MainWindow::rebuildModelMenu() {
         modelMenu_->addSeparator();
         QMenu *decode = modelMenu_->addMenu(QStringLiteral("16C inspector layout"));
         auto *decodeGroup = new QActionGroup(decode);
-        const int choices[] = {VC_MEM16_NONE, VC_MEM16_STD, VC_MEM16_EXT, VC_MEM16_LAYOUT206};
+        const int choices[] = {VC_MEM16_NONE, VC_MEM16_STD, VC_MEM16_LAYOUT206};      // 0.7.7: stock and 206 only
         for (int lay : choices) {
             const auto layout = Emulator::Memory16Layout(lay);
             QAction *a = decode->addAction(Emulator::layoutTitle(layout), this, [this, lay] { chooseInspectorLayout(lay); });
             a->setCheckable(true); a->setChecked(inspectorLayout_ == lay); decodeGroup->addAction(a);
         }
         decode->addSeparator();
-        decode->addAction(QStringLiteral("Decoding only; does not change firmware"))->setEnabled(false);
+        decode->addAction(QStringLiteral("Decoding and memory-import target; does not change firmware"))->setEnabled(false);
         QMenu *usbLay = modelMenu_->addMenu(QStringLiteral("USB 16C layout (physical self-test)"));
         auto *usbGroup = new QActionGroup(usbLay);
         for (int lay : choices) {
@@ -1004,28 +1004,43 @@ void MainWindow::undoMemoryImport() {
     });
 }
 
+int MainWindow::memory16Target() const {
+    // 0.7.7: an explicit choice in Model → 16C inspector layout (stock or 206) is the user's statement of the
+    // running firmware's pool; it wins over the ROM-detected layout. An unsupported pool stays unsupported.
+    const int chosen = inspectorLayout_;
+    if (fw_.mem16Layout == VC_MEM16_UNSUPPORTED) return VC_MEM16_UNSUPPORTED;
+    if (chosen == VC_MEM16_STD || chosen == VC_MEM16_LAYOUT206) return chosen;
+    return fw_.mem16Layout;
+}
+
 void MainWindow::offerMemory(const QByteArray &data, const QString &source, int explicitLayout) {
-    const int target = fw_.mem16Layout;
-    if (snap_.variant == 160 && target == VC_MEM16_LEGACY_B3) {
-        showError(QStringLiteral("B3B3 has a legacy aliased pool, not the linear 176-slot layout. Host memory loading/conversion is unsupported; keep a raw backup and use a corrected firmware. Nothing was loaded."));
+    const int target = memory16Target();
+    if (snap_.variant == 160 && target == VC_MEM16_UNSUPPORTED) {
+        showError(QStringLiteral("This firmware's 16C memory is neither stock nor 206 slots, the only layouts VoyagerCalc supports. Host memory loading is off for it; keep a raw backup and update the calculator to EAEA, C9C9 or ECEC. Nothing was loaded."));
         return;
     }
+    if (snap_.variant == 160 && target == VC_MEM16_UNDETERMINED) {
+        showError(QStringLiteral("This extended-memory firmware is not a known build, so its 16C layout was not guessed. Choose Stock (29 slots) or 206 slots in Model → 16C inspector layout, then open the file again. Nothing was loaded."));
+        return;
+    }
+    const bool overridden = target != fw_.mem16Layout;
     const QByteArray fw = firmwareData_;
     const int v = snap_.variant;
     const std::vector<int> imgs = fw_.images;
     const QString name = QStringLiteral("HP-") + model().name();
-    QThread *t = QThread::create([this, data, fw, v, imgs, name, source, target, explicitLayout] {
+    QThread *t = QThread::create([this, data, fw, v, imgs, name, source, target, explicitLayout, overridden] {
         QByteArray img = data;
         QString src = source;
         QString note;
         if (v == 160 && data.size() == Emulator::kMemorySize) {
             try {
                 std::optional<Emulator::Memory16Layout> known;
-                if (explicitLayout == VC_MEM16_STD || explicitLayout == VC_MEM16_EXT || explicitLayout == VC_MEM16_LAYOUT206)
+                if (explicitLayout == VC_MEM16_STD || explicitLayout == VC_MEM16_LAYOUT206)
                     known = Emulator::Memory16Layout(explicitLayout);
                 const Emulator::Memory16Import prepared = Emulator::prepareMemory16(data, Emulator::Memory16Layout(target), known);
                 img = prepared.data;
                 note = prepared.note;
+                if (overridden) note += QStringLiteral(" Target: %1 slots, as chosen in Model → 16C inspector layout.").arg(Emulator::memory16Slots(Emulator::Memory16Layout(target)));
                 if (prepared.converted) {
                     const QString from = prepared.ambiguous ? QStringLiteral("compatible raw layouts") : QString::number(Emulator::memory16Slots(prepared.source));
                     src += QStringLiteral(" (converted %1 → %2; original file unchanged)").arg(from).arg(Emulator::memory16Slots(Emulator::Memory16Layout(target)));
@@ -1358,10 +1373,14 @@ void MainWindow::saveCalculatorMemoryToFile() {
 void MainWindow::writeToCalculator() {
     if (!hasMemoryFiles()) return stockUnavailable(QStringLiteral("Writing the emulator's memory to the real calculator"));
     if (!running_ || linkBusy()) return;
-    const int sourceLayout = fw_.mem16Layout, targetLayout = connectedLayout_;
-    auto physical = [](int l) { return l == VC_MEM16_STD || l == VC_MEM16_EXT || l == VC_MEM16_LAYOUT206; };
-    if (snap_.variant == 160 && (!physical(sourceLayout) || !physical(targetLayout))) {
-        showError(QStringLiteral("Before writing 16C memory, choose the connected calculator’s layout in Model → USB 16C layout, using its self-test code (EAEA: 206; B7B7/E9E9: 176). The USB protocol cannot report that version. Nothing was written."));
+    const int sourceLayout = memory16Target(), targetLayout = connectedLayout_;
+    auto physical = [](int l) { return l == VC_MEM16_STD || l == VC_MEM16_LAYOUT206; };
+    if (snap_.variant == 160 && !physical(sourceLayout)) {
+        showError(QStringLiteral("The emulator's 16C memory is neither stock nor 206 slots (an unsupported or unconfirmed firmware). Choose Stock or 206 slots in Model → 16C inspector layout first. Nothing was written."));
+        return;
+    }
+    if (snap_.variant == 160 && !physical(targetLayout)) {
+        showError(QStringLiteral("Before writing 16C memory, choose the connected calculator’s layout in Model → USB 16C layout, using its self-test code (EAEA/C9C9/ECEC: 206 slots; stock: 29). The USB protocol cannot report that version. Nothing was written."));
         return;
     }
     const QByteArray fw = firmwareData_;
@@ -1375,9 +1394,7 @@ void MainWindow::writeToCalculator() {
         QByteArray payload = st->memory;
         QString layoutNote;
         if (st->variant == 160) {
-            const bool poolPair = (sourceLayout == VC_MEM16_EXT || sourceLayout == VC_MEM16_LAYOUT206)
-                && (targetLayout == VC_MEM16_EXT || targetLayout == VC_MEM16_LAYOUT206);
-            if (sourceLayout != targetLayout && poolPair) {
+            if (sourceLayout != targetLayout) {          // stock <-> 206 (the only two layouts)
                 const QByteArray converted = Emulator::convertPool(payload, Emulator::Memory16Layout(sourceLayout), Emulator::Memory16Layout(targetLayout));
                 if (converted.isEmpty()) {
                     showError(QStringLiteral("Cannot safely convert the emulator’s memory to the connected calculator’s layout. High data may not fit, or the calculator is active. Nothing was written."));

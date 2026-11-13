@@ -38,7 +38,7 @@ class TstSelftest : public QObject {
 private slots:
     void selfTestLooksTheSameOnEveryModel() {
         const QByteArray fw[3] = { vct::firmwareMatching(QStringLiteral("HP12c-multi*E6E6.bin")),   // boots as a 12C
-                                    vct::firmware15(), vct::firmware16() };
+                                    vct::firmware15(), vct::firmware206() };
         for (auto &f : fw) VC_REQUIRE(f, "12C/15C/16C");
         const QString dir = qEnvironmentVariable("VC_SHOT_DIR");
         QImage first;

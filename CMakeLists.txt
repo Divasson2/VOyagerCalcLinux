@@ -4,7 +4,7 @@
 # VoyagerCalc for Linux: Qt 6 front end around the C emulator core in core/.
 # Build:  cmake -S . -B build -G Ninja [-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64] && cmake --build build
 cmake_minimum_required(VERSION 3.21)
-project(VoyagerCalc VERSION 0.7.6 LANGUAGES C CXX)
+project(VoyagerCalc VERSION 0.7.7 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -64,8 +64,22 @@ target_link_libraries(voyagerui PUBLIC voyagerlogic Qt6::Widgets)
 if(WIN32)
   # Windows: the program is a GUI-subsystem exe with an icon and version resource; voyagercalc-cli.exe is the same program as a console exe
   # (--usb-selftest, --version print into the terminal).
-  add_executable(voyagercalc WIN32 src/main.cpp packaging/windows/voyagercalc.rc)
-  add_executable(voyagercalc-cli src/main.cpp packaging/windows/voyagercalc.rc)
+  # VERSIONINFO is generated from PROJECT_VERSION so the Properties pane cannot drift from the CMake version.
+  if(PROJECT_VERSION_TWEAK STREQUAL "")
+    set(_vc_ver_tweak 0)
+  else()
+    set(_vc_ver_tweak "${PROJECT_VERSION_TWEAK}")
+  endif()
+  set(VC_FILEVERSION_CSV "${PROJECT_VERSION_MAJOR},${PROJECT_VERSION_MINOR},${PROJECT_VERSION_PATCH},${_vc_ver_tweak}")
+  file(TO_CMAKE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/voyagercalc.ico" VC_WIN_ICON)
+  configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/voyagercalc.rc.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/voyagercalc.rc"
+    @ONLY)
+  set(_vc_win_rc "${CMAKE_CURRENT_BINARY_DIR}/voyagercalc.rc")
+  set_source_files_properties(${_vc_win_rc} PROPERTIES OBJECT_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/packaging/windows/voyagercalc.ico")
+  add_executable(voyagercalc WIN32 src/main.cpp ${_vc_win_rc})
+  add_executable(voyagercalc-cli src/main.cpp ${_vc_win_rc})
   target_link_libraries(voyagercalc-cli PRIVATE voyagerui)
   set_target_properties(voyagercalc-cli PROPERTIES WIN32_EXECUTABLE OFF)
 else()
@@ -91,10 +105,17 @@ function(vc_test name)
     set_target_properties(tst_${name} PROPERTIES WIN32_EXECUTABLE OFF)
   endif()
 endfunction()
-set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app selftest speed matrix manz calcactions layout)
+set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app selftest speed matrix manz calcactions layout pool206)
 add_executable(test_layout206 core/tests/test_layout206.c)
 target_link_libraries(test_layout206 PRIVATE voyagercore)
 add_test(NAME layout206 COMMAND test_layout206)
+add_executable(test_pool206_fw core/tests/test_pool206_fw.c)
+target_link_libraries(test_pool206_fw PRIVATE voyagercore)
+add_test(NAME pool206fw COMMAND test_pool206_fw)   # reads VC_FIRMWARE_DIR; skips without it
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if(Python3_Interpreter_FOUND AND NOT CMAKE_CROSSCOMPILING)
+  add_test(NAME convert16c COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/tools/test_convert_16c_memory.py)   # tools/convert_16c_memory.py
+endif()
 if(NOT WIN32)
   list(APPEND VC_TESTS usb)            # hidraw / udev / sysfs: Linux only
 endif()

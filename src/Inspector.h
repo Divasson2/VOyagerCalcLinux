@@ -90,18 +90,14 @@ struct Pool16 {
     int programSlots() const { return (lines + 6) / 7; }
     int availableSlots() const { return std::max(0, slotCount() - programSlots()); }
     int dataBytes() const { return slotCount() * 7; }
-    int floor() const { return layout == Emulator::Memory16Layout::LegacyB3 ? 0x20 : 0xFD - slotCount(); }
-    int remap() const {
-        return layout == Emulator::Memory16Layout::Layout206 ? 0x0F : layout == Emulator::Memory16Layout::Standard ? 0 : 0x2D;
-    }
+    int floor() const { return 0xFD - slotCount(); }
+    int remap() const { return layout == Emulator::Memory16Layout::Layout206 ? 0x0F : 0; }
     QString title() const { return Emulator::layoutTitle(layout); }
     QString summary() const { return QStringLiteral("%1 slots / %2 bytes, program %3 slots, %4 registers at WS%5").arg(slotCount()).arg(dataBytes()).arg(programSlots()).arg(registers).arg(wordSize); }
     QString range() const {
-        const bool standard = layout == Emulator::Memory16Layout::Standard;
-        const bool early = layout == Emulator::Memory16Layout::EarlyE3E3;
-        const bool wide = standard || layout == Emulator::Memory16Layout::Layout206;
-        const int file = standard ? 0x6F0 : early ? 0x170 : 0x168;
-        const int end = wide ? 0x7D7 : early ? 0x6EF : 0x6E7;
+        const bool standard = layout == Emulator::Memory16Layout::Standard;   // otherwise the 206-slot pool
+        const int file = standard ? 0x6F0 : 0x168;
+        const int end = 0x7D7;
         auto hex = [](int v, int width) { return QStringLiteral("%1").arg(v, width, 16, QLatin1Char('0')).toUpper(); };
         return QStringLiteral("Nut %1-FC; file +%2-+%3; remap -%4").arg(hex(floor(), 2), hex(file, 3), hex(end, 3), hex(remap(), 2));
     }

@@ -49,7 +49,7 @@ the whole-calculator engine.
 ```
 build/vcore -f FIRMWARE.bin --info
 build/vcore -f FIRMWARE.bin --keys "1 ENTER 1 +" --show
-build/vcore -f FIRMWARE.bin --load miller-rabin-ext-ready.16c --fmem --keys "2147483647 GSB A" --show --save out.16c
+build/vcore -f FIRMWARE.bin --load PROGRAM.16c --fmem --keys "2147483647 GSB A" --show --save out.16c
 build/vcore -f FIRMWARE.bin --whole --keys "ON g+ENTER+ON wait:2000" --show --frames --lcd
 build/vcore -f FIRMWARE.bin --protocol seqs.txt [--load M.16c] [--whole]   # per-key log for comparisons
 ```
@@ -84,7 +84,29 @@ Annunciator bits in the LCD memory (found with the simulator): f = bit 6, g = bi
 C (carry) = bit 21, G (out of range) = bit 14, PRGM = bit 24. The low-battery mark is **not
 mapped yet**.
 
+## HP-16C memory layouts (0.7.7)
+
+Only two 16C memory layouts are supported: the **stock** layout (29 slots, pool at 0x6F0) and the
+**206-slot** extended layout of EAEA, C9C9 and ECEC (pool at 0x168, R0–R720 at WS16). The memory file
+format has no layout tag; `vc_memory_layout()` and `vc_memory_precheck()` tell the two apart, and a
+stock file is converted to 206 slots (or back) only when nothing is lost. Earlier intermediate extended
+builds are listed as `VC_MEM16_UNSUPPORTED`: keys and display work, but host memory transfers and the
+inspector are refused for them. An unknown 16C firmware is detected as stock or 206 from its code; if
+that is not possible it is `VC_MEM16_UNDETERMINED` and the app asks the user (`vc_set_mem16_layout`).
+No layout is ever guessed.
+
+## 48 MHz runs unthrottled (0.7.7)
+
+`vc_set_unthrottled_48mhz(c, wall_us)` (the apps use `VC_UNTHROTTLED_48MHZ_US`, 7 ms): when the
+firmware's clock setting is 48 MHz, a busy 10 ms slice is not limited to the 48 MHz instruction budget;
+it keeps running at host speed until the firmware sleeps (WFI) or `wall_us` of host time have passed.
+The 10 ms timer tick still comes once per slice, so the calculator's clock, timers and an idle calculator
+stay real time. 4 and 12 MHz are unchanged. Default 0 (off) so the C tests stay deterministic.
+
 ## Test results (2026-10-10)
+
+(These runs used the extended builds of that time, B7B7 and B5B5, which 0.7.7 no longer supports for
+memory files; the engine comparisons themselves are unchanged.)
 
 These results were obtained by comparing against the author's Python simulator (voyager-sim) with the same
 firmware file. The comparison scripts are not part of this repository; the C tests in `tests/` need a firmware file you own
@@ -123,7 +145,7 @@ firmware file. The comparison scripts are not part of this repository; the C tes
 So the core is about **5× faster than the real CE at 48 MHz** and about 3× faster than the
 Python simulator. In the whole-calculator engine an idle calculator runs about 1,000× faster
 than real time (it skips the sleeps), and a busy one about 2–3× faster than the model's own
-clock. The app will slow it down to real time (or offer "turbo"). There is room to make the
+clock. The apps run it in real time (at 48 MHz a busy calculator runs at host speed, see above). There is room to make the
 interpreter faster later (instruction decode cache) if needed; the Mac's M-series chip is
 also faster per core than this box.
 

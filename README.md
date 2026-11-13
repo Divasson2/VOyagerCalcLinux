@@ -13,7 +13,7 @@ over USB (`hidraw` on Linux, the standard Windows HID driver on Windows).
 * Licence: [MIT](LICENSE). Not affiliated with, endorsed by or sponsored by HP Inc.; "HP" and the calculator model names
   belong to their owners.
 
-> Status: version 0.7.6, a test release. HP-16C memory files are detected automatically (stock, 176-slot extended, and the 206-slot EAEA layout, R0–R720). Reading and writing the calculator's memory over USB works with a real calculator on both
+> Status: version 0.7.7, a test release. HP-16C memory files use one of two layouts, detected automatically: stock (29 slots) or the 206-slot extended layout of EAEA, C9C9 and ECEC (R0–R720). At the firmware's 48 MHz speed setting a running program is no longer held to the 48 MHz instruction budget. Reading and writing the calculator's memory over USB works with a real calculator on both
 > platforms in the author's tests: Linux, and Windows (tested on Windows 11 ARM with a real HP-15C). The Windows x64 build has been tested
 > under wine only, with a fake HID device. Reports from other systems and calculators are welcome.
 
@@ -23,7 +23,7 @@ This repository and its builds contain **no HP firmware**; you supply the firmwa
 (a retailer of HP calculators, run by the author) keeps pages with firmware downloads and links:
 
 * Official HP firmware: <https://www.thecalculatorstore.com/c/resources-and-links/official-hp-calculator-firmware>
-* Test and extended firmware (HP-15C CE C8C8, HP-16C CE B7B7, 10bII+ EDED, HP-12C CE multi E6E6): <https://www.thecalculatorstore.com/c/resources-and-links/hp-calculator-test-firmware>
+* Test and extended firmware (HP-15C CE C8C8, HP-16C CE extended (EAEA, C9C9, ECEC), 10bII+ EDED, HP-12C CE multi E6E6): <https://www.thecalculatorstore.com/c/resources-and-links/hp-calculator-test-firmware>
 * Simulators and emulators: <https://www.thecalculatorstore.com/c/resources-and-links/simulators-and-emulators>
 
 Using firmware is at your own responsibility; the project is not affiliated with HP Inc.
@@ -45,6 +45,17 @@ Debian / Ubuntu: `sudo apt install build-essential cmake ninja-build qt6-base-de
 * Windows: [docs/INSTALL-WINDOWS.md](docs/INSTALL-WINDOWS.md): per-user installer or zip, USB, troubleshooting ("VoyagerCalc USB Test").
   Build instructions (native or cross-compiled from Linux, x64 and arm64): [docs/BUILD-WINDOWS.md](docs/BUILD-WINDOWS.md);
   signing the release builds: [docs/SIGNING-WINDOWS.md](docs/SIGNING-WINDOWS.md).
+
+## Converting old HP-16C memory files
+
+16C memory files saved on the retired 176-slot extended builds (B4B4–B7B7, E3E3, E8E8, E9E9) no longer open in 0.7.7. `tools/convert_16c_memory.py` (Python 3.8+, standard library only; also in the `tools` folder of the Linux and Windows packages) converts them to the 206-slot layout of EAEA, C9C9 and ECEC, and converts a stock file with `--from stock`:
+
+```
+python3 tools/convert_16c_memory.py OLD.16c            # writes OLD-206.16c, the original is kept
+python3 tools/convert_16c_memory.py --check *.16c      # report the detected layout only
+```
+
+See `tools/README.md` and `--help`.
 
 ## Tests
 

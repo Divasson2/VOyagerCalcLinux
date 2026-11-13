@@ -19,7 +19,7 @@ ap.add_argument('--mingw-bin', required=True)
 ap.add_argument('--objdump', required=True)
 ap.add_argument('--out', required=True)
 ap.add_argument('--tag', default='')
-ap.add_argument('--version', default='0.7.6')
+ap.add_argument('--version', default='0.7.7')
 ap.add_argument('--makensis', default='')
 ap.add_argument('--nsisdir', default='')
 ap.add_argument('--no-staging', action='store_true', help='do not make the unsigned staging package for sign-windows.ps1')
@@ -72,6 +72,10 @@ _guide = os.path.join(ROOT, 'docs', 'VoyagerCalc-User-Manual.pdf')
 if not os.path.isfile(_guide): sys.exit('missing docs/VoyagerCalc-User-Manual.pdf: run docs/manual/build.py first')
 put(_guide, 'VoyagerCalc User Manual.pdf')
 shutil.copy2(os.path.join(HERE, 'VoyagerCalc USB Test.bat'), os.path.join(root, 'VoyagerCalc USB Test.bat'))
+# 0.7.7: converter for old (176-slot) HP-16C memory files; plain Python 3.8+ script, also installed by setup.exe
+os.makedirs(os.path.join(root, 'tools'), exist_ok=True)
+for f in ('convert_16c_memory.py', 'README.md'):
+    put(os.path.join(ROOT, 'tools', f), os.path.join('tools', f))
 # the tests' qt.conf: nothing needed, plugins sit in platforms\ and styles\ next to the exe
 
 # nothing that looks like firmware may be in the package (an HP ROM image is a few hundred KB .bin)

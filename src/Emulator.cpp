@@ -6,7 +6,10 @@
 
 namespace vc {
 
-Emulator::Emulator() : c_(vc_create()) { vc_set_clock_ipc(c_, VC_IPC_REAL); }   // real 15C CE speed (0.7.1 test10)
+Emulator::Emulator() : c_(vc_create()) {
+    vc_set_clock_ipc(c_, VC_IPC_REAL);                          // real 15C CE speed at 4 / 12 MHz (0.7.1 test10)
+    vc_set_unthrottled_48mhz(c_, VC_UNTHROTTLED_48MHZ_US);      // 0.7.7: 48 MHz runs at full host speed
+}
 Emulator::~Emulator() { vc_destroy(c_); }
 
 QString Emulator::lastError() const {
@@ -66,12 +69,6 @@ Emulator::LayoutCheck Emulator::precheckMemory(const QByteArray &mem) const {
     return r;
 }
 
-QByteArray Emulator::convertE3E3(const QByteArray &mem) {
-    if (mem.size() != kMemorySize) return QByteArray();
-    QByteArray out = mem;
-    return vc_memory_convert_e3e3(reinterpret_cast<uint8_t *>(out.data())) == 1 ? out : QByteArray();
-}
-
 QString Emulator::firmwareInfo() const {
     const char *i = vc_firmware_info(c_);
     return i ? QString::fromUtf8(i) : QString();
@@ -93,16 +90,15 @@ std::vector<int> Emulator::firmwareImages() const {
 QString Emulator::layoutTitle(Memory16Layout l) {
     switch (l) {
     case Memory16Layout::Automatic: return QStringLiteral("Automatic (running firmware)");
-    case Memory16Layout::LegacyB3: return QStringLiteral("B3B3 legacy aliased pool (inspection unsupported)");
-    case Memory16Layout::Standard: return QStringLiteral("Stock CE / standard Multi: 29 slots (203 bytes)");
-    case Memory16Layout::Layout176: return QStringLiteral("B7B7 / E9E9: 176 slots");
-    case Memory16Layout::EarlyE3E3: return QStringLiteral("Early E3E3: 176 slots (+8 bytes)");
-    case Memory16Layout::Layout206: return QStringLiteral("206 slots: EAEA and successors (up to R720 at WS16)");
+    case Memory16Layout::Standard: return QStringLiteral("Stock 16C: 29 slots (203 bytes)");
+    case Memory16Layout::Layout206: return QStringLiteral("Extended 16C: 206 slots (EAEA / C9C9 / ECEC, up to R720 at WS16)");
+    case Memory16Layout::Unsupported: return QStringLiteral("Unsupported 16C pool (memory loading and inspector off)");
+    case Memory16Layout::Undetermined: return QStringLiteral("Extended 16C, layout not confirmed (choose stock or 206 slots)");
     default: return QStringLiteral("an unknown layout");
     }
 }
 int Emulator::memory16Slots(Memory16Layout l) {
-    return l == Memory16Layout::Layout206 ? 206 : l == Memory16Layout::Standard ? 29 : 176;
+    return l == Memory16Layout::Layout206 ? 206 : l == Memory16Layout::Standard ? 29 : 0;
 }
 
 int Emulator::KnownFirmware::keyFor(int variant) const {
@@ -173,7 +169,7 @@ void Emulator::setMemory16Layout(Memory16Layout layout) { check(vc_set_mem16_lay
 
 static std::vector<Emulator::Memory16Layout> layoutsIn(unsigned mask) {
     std::vector<Emulator::Memory16Layout> out;
-    for (auto l : {Emulator::Memory16Layout::Standard, Emulator::Memory16Layout::Layout176, Emulator::Memory16Layout::Layout206})
+    for (auto l : {Emulator::Memory16Layout::Standard, Emulator::Memory16Layout::Layout206})
         if (mask & (1u << int(l))) out.push_back(l);
     return out;
 }
@@ -204,12 +200,12 @@ Emulator::Memory16Import Emulator::prepareMemory16(const QByteArray &data, Memor
         r.data = data; r.source = target; r.converted = false; r.ambiguous = ambiguous; r.note = text;
         return r;
     };
-    const Memory16Layout supported[] = {Memory16Layout::Standard, Memory16Layout::Layout176, Memory16Layout::Layout206};
+    const Memory16Layout supported[] = {Memory16Layout::Standard, Memory16Layout::Layout206};
     auto supportedLayout = [&](Memory16Layout l) { return std::find(std::begin(supported), std::end(supported), l) != std::end(supported); };
     if (!supportedLayout(target) || data.size() != kMemorySize)
         return unchanged(QStringLiteral("No automatic 16C layout conversion."), true);
     if (knownSource && !supportedLayout(*knownSource))
-        return unchanged(QStringLiteral("Historical source layout is outside the three automatic maps; using current firmware unchanged."), true);
+        return unchanged(QStringLiteral("The source layout is neither stock nor 206 slots; using current firmware unchanged."), true);
     const Memory16Analysis a = analyzeMemory16(data);
     std::vector<Memory16Layout> candidates = (knownSource && supportedLayout(*knownSource)) ? std::vector<Memory16Layout>{*knownSource} : a.evidence;
     if (candidates.empty())
@@ -218,9 +214,7 @@ Emulator::Memory16Import Emulator::prepareMemory16(const QByteArray &data, Memor
     if (candidates.size() > 1 && contains(target))
         return unchanged(QStringLiteral("Ambiguous raw memory layout; using current %1-slot firmware layout unchanged.").arg(memory16Slots(target)), true);
     if (candidates.size() == 1 && candidates.front() == target) {
-        const QString why = knownSource ? QStringLiteral("connected self-test")
-            : a.candidates.size() == 1 ? QStringLiteral("structural evidence")
-            : QStringLiteral("empty high-chip window and 616 program placement");
+        const QString why = knownSource ? QStringLiteral("connected self-test") : QStringLiteral("structural evidence");
         return unchanged(QStringLiteral("Memory layout matches current %1-slot firmware (%2).").arg(memory16Slots(target)).arg(why), false);
     }
     std::vector<QByteArray> conversions;
@@ -238,9 +232,7 @@ Emulator::Memory16Import Emulator::prepareMemory16(const QByteArray &data, Memor
         return unchanged(QStringLiteral("Ambiguous raw memory layout; using current %1-slot firmware layout unchanged (interpretations differ).").arg(memory16Slots(target)), true);
     const Memory16Layout from = candidates.front();
     const QString why = candidates.size() > 1 ? QStringLiteral("all supported interpretations produce identical bytes")
-        : knownSource ? QStringLiteral("connected self-test")
-        : a.candidates.size() == 1 ? QStringLiteral("structural evidence")
-        : QStringLiteral("inferred from empty high-chip window and 616 program placement");
+        : knownSource ? QStringLiteral("connected self-test") : QStringLiteral("structural evidence");
     const QString description = candidates.size() > 1
         ? QStringLiteral("Automatically normalized compatible raw layouts to %1 slots").arg(memory16Slots(target))
         : QStringLiteral("Automatically converted %1 → %2 slots").arg(memory16Slots(from)).arg(memory16Slots(target));

@@ -6,7 +6,7 @@ Default output: ../VoyagerCalc-User-Manual.pdf (that is docs/VoyagerCalc-User-Ma
 Needs: pip install weasyprint. Put the release's SHA256SUMS next to this file to list it in Appendix A.
 """
 import argparse, re, html, pathlib, weasyprint
-VERSION = '0.7.6'
+VERSION = '0.7.7'
 D = pathlib.Path(__file__).resolve().parent
 ap = argparse.ArgumentParser(); ap.add_argument('--out', default=str(D.parent / 'VoyagerCalc-User-Manual.pdf')); ap.add_argument('--html', default='')
 a = ap.parse_args()

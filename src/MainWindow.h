@@ -137,6 +137,7 @@ public:
     void openMemoryFile(const QString &path);
     void saveMemory(std::function<void()> after = nullptr);
     void offerMemory(const QByteArray &data, const QString &source, int explicitLayout = -1);
+    int memory16Target() const;                 // 0.7.7: inspector-layout choice if physical, else the firmware layout
     QString memoryImportStatus() const { return memoryImportStatus_; }
     bool canUndoMemoryImport() const;
     void undoMemoryImport();

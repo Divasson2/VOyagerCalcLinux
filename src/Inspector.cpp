@@ -150,8 +150,7 @@ std::optional<InspectorSnapshot> inspect(Emulator &emu, bool includeProgram, int
     s.hasI = info.has_i != 0; s.hasProgram = info.has_program != 0; s.extendedMemory = info.ext_memory != 0;
     if (s.model == 16) {
         const auto lay = Emulator::Memory16Layout(info.mem_layout);
-        if (lay == Emulator::Memory16Layout::Standard || lay == Emulator::Memory16Layout::Layout176
-            || lay == Emulator::Memory16Layout::EarlyE3E3 || lay == Emulator::Memory16Layout::Layout206) {
+        if (lay == Emulator::Memory16Layout::Standard || lay == Emulator::Memory16Layout::Layout206) {
             Pool16 p;
             p.layout = lay; p.wordSize = s.wordSize; p.lines = s.lines; p.registers = s.registerCount;
             s.pool16 = p;

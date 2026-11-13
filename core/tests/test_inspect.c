@@ -1,17 +1,18 @@
 /* test_inspect.c - the read-only inspection API: registers, modes, program listing, pointer.
  *
  * usage: test_inspect   (paths from the environment, defaults under /workspace; missing files skip)
- *   B7  HP-16C CE Path-C firmware (B7B7)      ST  stock HP-16C CE firmware
- *   MULTI  HP-12C CE multi E3E3               SAMPLES  voyager-sim-public/samples
- *   MRLIST  miller-rabin-A.txt                PHILIST  phi-E-D-2747.txt
+ *   EA  HP-16C Enhanced EAEA (206 slots)      ST  stock HP-16C CE firmware
+ *   MULTI  HP-12C CE Multi pool206 ECEC       SAMPLES  voyager-sim-public/samples
+ *   (0.7.7: only stock and 206-slot 16C memory; the stock samples are converted to 206 for EAEA)
+ *   MRLIST  miller-rabin-A.txt
  * Checks:
- *   - decoded listings = the published listings (Miller-Rabin 117 steps: keycodes and mnemonics;
- *     phi E+D 84 steps: mnemonics), Path-C and stock firmware;
+ *   - decoded listings = the published listings (Miller-Rabin 117 steps: keycodes and mnemonics),
+ *     206-slot and stock firmware;
  *   - registers after "2147483647 GSB A" (n, n-1, d, s ...) on both layouts, f MEM register count;
  *   - SST / BST / GTO move the reported line; R/S in the whole engine reports running, then stopped;
- *   - bases, word sizes, complement modes, FLOAT; R615 at WSIZE 16 (Path-C top register);
+ *   - bases, word sizes, complement modes, FLOAT; R720 at WSIZE 16 (206-slot top register);
  *   - inspection never changes the calculator: same memory, same statistics, same run;
- *   - the multi's 16C (Path-C), 15C (15.2) and 12C modes.
+ *   - the multi's 16C (206 slots), 15C (15.2) and 12C modes.
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 José González Divassón */
 #include "voyager_core.h"
@@ -19,6 +20,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+
+/* Miller-Rabin (117 lines = 17 program slots) at WSIZE 64 in the 206-slot pool: (206 - 17) * 14 / 16 registers */
+#define MR206 ((206 - 17) * 14 / 16)
 
 static int fails, checks;
 #define CHECK(cond, ...) do { checks++; if (!(cond)) { fails++; printf("  FAIL %s:%d: ", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n"); } } while (0)
@@ -34,6 +38,13 @@ static vc_calc *open_fw(const char *path, int engine) {
     vc_calc *c = vc_create(); int r = vc_load_firmware(c, b, n); free(b);
     if (r || vc_start(c, engine, 1)) { printf("  FAIL cannot start %s: %s\n", path, vc_last_error(c)); fails++; vc_destroy(c); return NULL; }
     return c;
+}
+/* a stock-layout sample, converted to the 206-slot pool (vc_memory_convert_pool) for EAEA / ECEC */
+static int load_mem206(vc_calc *c, const char *path) {
+    size_t n; uint8_t *b = readfile(path, &n); int ok = b && n == VC_MEMORY_SIZE;
+    if (ok) { CHECK(vc_memory_convert_pool(b, VC_MEM16_STD, VC_MEM16_LAYOUT206) == 1, "%s: stock -> 206", path); vc_load_memory(c, b); }
+    else printf("  SKIP (no %s)\n", path);
+    free(b); return ok;
 }
 static int load_mem(vc_calc *c, const char *path) {
     size_t n; uint8_t *b = readfile(path, &n); int ok = b && n == VC_MEMORY_SIZE;
@@ -137,19 +148,18 @@ static void mr_registers(vc_calc *c, int regs) {
 
 const char *text(vc_calc *c);
 int main(void) {
-    const char *B7 = env("B7", "/workspace/Firmware/Voyager16-ext-path-c-trim4-show-B7B7.bin");
+    const char *B7 = env("EA", "/workspace/vc077/fw/HP16c-enhanced-152-pool206-EAEA.bin");
     const char *ST = env("ST", "/workspace/Firmware/_baseline_hp16c-firmware.bin");
-    const char *MULTI = env("MULTI", "/workspace/Firmware/HP12c-multi-152-ext16-E3E3.bin");
+    const char *MULTI = env("MULTI", "/workspace/vc077/fw/HP12c-Multi-pool206-VMS1-ECEC-TEST.bin");
     const char *SAMPLES = env("SAMPLES", "/workspace/voyager-sim-public/samples");
     const char *MRLIST = env("MRLIST", "/workspace/blog-prime/programs/miller-rabin-A.txt");
-    const char *PHILIST = env("PHILIST", "/workspace/blog-phi/programs/phi-E-D-2747.txt");
     char p[512]; vc_calc *c; vc_inspect_info in; vc_value v;
 
     printf("== calculator images in the firmware (vc_firmware_images)\n");
     {
         const char *fws[3] = {B7, MULTI, env("F15", "/workspace/Firmware/hp15c-3rom-mute120-fsm5-rel80-opt5cycle-debounce-menu-stopwatch-48fix-keys-batt-trim4-show-C8C8.bin")};
-        static const int want[3][4] = {{160}, {120, 152, 160}, {150, 152, 160}};
-        static const int wantn[3] = {1, 3, 3};
+        static const int want[3][4] = {{152, 160}, {120, 152, 160}, {150, 152, 160}};
+        static const int wantn[3] = {2, 3, 3};
         for (int f = 0; f < 3; f++) {
             size_t n; uint8_t *b = readfile(fws[f], &n);
             if (!b) { printf("  SKIP (no %s)\n", fws[f]); continue; }
@@ -160,15 +170,15 @@ int main(void) {
             vc_destroy(x);
         }
     }
-    printf("== HP-16C Path-C (B7B7): Miller-Rabin listing and registers\n");
+    printf("== HP-16C 206 slots (EAEA): Miller-Rabin listing and registers\n");
     if ((c = open_fw(B7, VC_ENGINE_RUNNER))) {
-        snprintf(p, sizeof p, "%s/miller-rabin-ext-ready.16c", SAMPLES);
-        if (load_mem(c, p)) {
-            in = info(c); CHECK(in.ext_memory && in.registers == 139 && in.line == 0, "ext %d regs %d line %d", in.ext_memory, in.registers, in.line);
+        snprintf(p, sizeof p, "%s/miller-rabin-standard-ready.16c", SAMPLES);
+        if (load_mem206(c, p)) {
+            in = info(c); CHECK(in.ext_memory && in.registers == MR206 && in.line == 0, "ext %d regs %d line %d", in.ext_memory, in.registers, in.line);
             compare_listing(c, MRLIST, 117, 1);
             readonly(c);
             keys(c, "2147483647 GSB A");
-            mr_registers(c, 139); readonly(c);
+            mr_registers(c, MR206); readonly(c);
             /* pointer: GTO label, SST/BST in program mode, SST in run mode */
             keys(c, "GTO F"); CHECK(info(c).line == 114, "GTO F: line %d", info(c).line);
             keys(c, "g R/S"); in = info(c); CHECK(in.prgm_mode && in.line == 114, "P/R: prgm %d line %d", in.prgm_mode, in.line);
@@ -186,12 +196,6 @@ int main(void) {
         }
         vc_destroy(c);
     }
-    if ((c = open_fw(B7, VC_ENGINE_RUNNER))) {
-        snprintf(p, sizeof p, "%s/phi-2747-ext-ready.16c", SAMPLES);
-        if (load_mem(c, p)) { compare_listing(c, PHILIST, 84, 0); CHECK(info(c).registers == 164, "phi registers %d", info(c).registers); }
-        vc_destroy(c);
-    }
-
     printf("== HP-16C stock layout\n");
     if ((c = open_fw(ST, VC_ENGINE_RUNNER))) {
         snprintf(p, sizeof p, "%s/miller-rabin-standard-ready.16c", SAMPLES);
@@ -203,22 +207,22 @@ int main(void) {
         vc_destroy(c);
     }
 
-    printf("== HP-16C bases, word sizes, complements, FLOAT, R615\n");
+    printf("== HP-16C bases, word sizes, complements, FLOAT, R720\n");
     if ((c = open_fw(B7, VC_ENGINE_RUNNER))) {
         keys(c, "DEC 1 6 f STO f 2 1 0 0 CHS");
-        in = info(c); CHECK(in.word_size == 16 && in.complement == 2 && in.base == 10 && in.registers == 616, "ws %d comp %d base %d regs %d", in.word_size, in.complement, in.base, in.registers);
+        in = info(c); CHECK(in.word_size == 16 && in.complement == 2 && in.base == 10 && in.registers == 721, "ws %d comp %d base %d regs %d", in.word_size, in.complement, in.base, in.registers);
         v = stk(c, VC_REG_X); TEXT(v, "-100"); CHECK(v.kind == VC_VAL_INT && v.word == 0xFF9C && v.negative && v.number == -100, "X word %llx", (unsigned long long)v.word);
         keys(c, "HEX"); v = stk(c, VC_REG_X); TEXT(v, "FF9C"); DEC(v, "-100"); CHECK(info(c).base == 16, "base");
         keys(c, "OCT"); TEXT(stk(c, VC_REG_X), "177634");
         keys(c, "BIN"); TEXT(stk(c, VC_REG_X), "1111111110011100");
         keys(c, "f 1"); v = stk(c, VC_REG_X); DEC(v, "-99"); CHECK(info(c).complement == 1, "1's");
         keys(c, "f 3"); v = stk(c, VC_REG_X); DEC(v, "65436"); CHECK(info(c).complement == 0 && !v.negative, "UNSGN");
-        keys(c, "HEX 2 6 7 STO SST 7 7 7 7 STO R/S 1 2 STO 0");
-        TEXT(stk(c, VC_REG_I), "267"); v = reg(c, 615); TEXT(v, "7777"); CHECK(!strcmp(v.name, "R615"), "name %s", v.name);
-        TEXT(reg(c, 0), "12"); CHECK(vc_inspect_register(c, 616, &v) == VC_ERR_ARG, "R616 exists at WSIZE 16");
+        keys(c, "HEX 2 D 0 STO SST 7 7 7 7 STO R/S 1 2 STO 0");
+        TEXT(stk(c, VC_REG_I), "2D0"); v = reg(c, 720); TEXT(v, "7777"); CHECK(!strcmp(v.name, "R720"), "name %s", v.name);
+        TEXT(reg(c, 0), "12"); CHECK(vc_inspect_register(c, 721, &v) == VC_ERR_ARG, "R721 exists at WSIZE 16");
         keys(c, "F F F F 1 +"); CHECK(info(c).flags & 0x10, "carry flag (4) after FFFF + 1: flags %x", info(c).flags);
         keys(c, "g 4 3"); CHECK(info(c).flags & 0x08, "SF 3: flags %x", info(c).flags);
-        keys(c, "DEC 3 3 f STO"); in = info(c); CHECK(in.word_size == 33 && in.registers == 2464 / 9, "WSIZE 33: %d %d", in.word_size, in.registers);
+        keys(c, "DEC 3 3 f STO"); in = info(c); CHECK(in.word_size == 33 && in.registers == 2884 / 9, "WSIZE 33: %d %d", in.word_size, in.registers);
         keys(c, "6 4 f STO 1 ENTER 2 +"); CHECK(info(c).word_size == 64, "WSIZE 64"); TEXT(stk(c, VC_REG_X), "3");
         keys(c, "f RCL 4 2 ENTER 3 /");
         in = info(c); CHECK(in.base == 0 && in.word_size == 56, "FLOAT: base %d ws %d", in.base, in.word_size);
@@ -231,13 +235,13 @@ int main(void) {
     printf("== HP-16C whole engine: R/S running state and live pointer, inspection does not disturb timing\n");
     {
         vc_calc *a = open_fw(B7, VC_ENGINE_WHOLE), *b = open_fw(B7, VC_ENGINE_WHOLE);
-        snprintf(p, sizeof p, "%s/miller-rabin-ext-ready.16c", SAMPLES);
+        snprintf(p, sizeof p, "%s/miller-rabin-standard-ready.16c", SAMPLES);
         if (a && b) {
             vc_calc *both[2] = {a, b}; int k, i, saw_run = 0, lines_seen = 0, last = -1;
             whole = 1;
             for (k = 0; k < 2; k++) {
                 vc_press_key(both[k], 30); vc_run_ms(both[k], 150); vc_release_key(both[k], 30); vc_run_ms(both[k], 1500);
-                keys(both[k], "BSP"); load_mem(both[k], p); keys(both[k], "1 0 0 0 7 GSB");
+                keys(both[k], "BSP"); load_mem206(both[k], p); keys(both[k], "1 0 0 0 7 GSB");
                 if (!k) CHECK(!info(a).running, "running before the program");
                 keys(both[k], "A");
             }
@@ -328,10 +332,10 @@ int multi_tests(vc_calc *c) {
     CHECK(sw(c, 3) == 15, "switch to 15C");
     test15(c, 152, 95);
     printf("  12C and 15C checked\n");
-    /* 16C mode (Path-C) */
+    /* 16C mode (206 slots) */
     CHECK(sw(c, 5) == 16, "switch to 16C");
     keys(c, "HEX 1 0 f STO 2 6 7 STO SST 5 5 5 STO R/S A B STO 0");
-    in = info(c); CHECK(in.model == 16 && in.ext_memory && in.word_size == 16 && in.registers == 616, "multi 16C: ext %d ws %d regs %d", in.ext_memory, in.word_size, in.registers);
+    in = info(c); CHECK(in.model == 16 && in.ext_memory && in.word_size == 16 && in.registers == 721, "multi 16C: ext %d ws %d regs %d", in.ext_memory, in.word_size, in.registers);
     TEXT(reg(c, 615), "555"); TEXT(reg(c, 0), "AB"); TEXT(stk(c, VC_REG_I), "267");
     keys(c, "g R/S f R↓ g GTO A 3 + g GSB g R/S");   /* P/R, CLEAR PRGM, LBL A 3 + RTN, P/R */
     n = vc_inspect_program(c, 1, p, 100);

@@ -24,6 +24,8 @@ small USB access rule in /etc/udev/rules.d/99-voyagercalc.rules.
 Memory files
 ------------
 Saved with the ending .bin12c / .bin15c / .bin16c by default; you can type any ending. Opening checks the file, not its ending.
+Old 16C memory files from the retired 176-slot builds (B4B4-B7B7, E3E3, E8E8, E9E9) no longer open. Convert them with
+  python3 tools/convert_16c_memory.py OLD.16c        (writes OLD-206.16c; see tools/README.md and --help)
 
 If reading does not work
 -----------------------

@@ -20,7 +20,7 @@ ap.add_argument('--readelf', default='readelf')
 ap.add_argument('--strip', default='strip')
 ap.add_argument('--out', required=True)
 ap.add_argument('--tag', default='')
-ap.add_argument('--version', default='0.7.6')
+ap.add_argument('--version', default='0.7.7')
 a = ap.parse_args()
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -107,6 +107,11 @@ for f, dst in (('README-linux.txt', 'README.txt'), ('THIRD-PARTY.txt', 'THIRD-PA
 _guide = os.path.join(LINUX, 'docs', 'VoyagerCalc-User-Manual.pdf')
 if not os.path.isfile(_guide): sys.exit('missing docs/VoyagerCalc-User-Manual.pdf: run docs/manual/build.py first')
 shutil.copy2(_guide, os.path.join(root, 'VoyagerCalc User Manual.pdf'))
+# 0.7.7: converter for old (176-slot) HP-16C memory files (plain Python 3.8+ script)
+os.makedirs(os.path.join(root, 'tools'), exist_ok=True)
+for f in ('convert_16c_memory.py', 'README.md'):
+    shutil.copy2(os.path.join(LINUX, 'tools', f), os.path.join(root, 'tools', f))
+os.chmod(os.path.join(root, 'tools', 'convert_16c_memory.py'), 0o755)
 os.chmod(os.path.join(root, 'install.sh'), 0o755); os.chmod(os.path.join(root, 'uninstall.sh'), 0o755)
 
 # --- safety: no firmware, ever -------------------------------------------------------------------------------------

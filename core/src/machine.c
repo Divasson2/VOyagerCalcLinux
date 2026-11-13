@@ -9,6 +9,9 @@
  * SPDX-License-Identifier: MIT
  * Copyright (c) 2026 José González Divassón
  */
+#if !defined(_WIN32) && !defined(_POSIX_C_SOURCE) && !defined(__APPLE__)
+#define _POSIX_C_SOURCE 200809L   /* clock_gettime */
+#endif
 #include "voyager_core.h"
 #include "cpu.h"
 #include "sha256.h"
@@ -16,6 +19,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define NOMINMAX
+#include <windows.h>
+#else
+#include <time.h>
+#endif
 
 /* ---------------------------------------------------------------- constants */
 #define FLASH_BASE   0x4000u
@@ -199,6 +209,7 @@ struct vc_calc {
     uint32_t clk_addr;       /* SRAM address of the firmware's CPU-clock variable (Hz), build specific */
     uint32_t adc_value, adc_vec, tick_vec;
     double battery;
+    uint32_t unthrottle48_us;    /* 0.7.7: host-time budget per 10 ms slice at 48 MHz (0 = real-time budget only) */
     double ipc;                  /* ARM instructions per CPU clock used for the 10 ms slice (default 0.75) */
     uint32_t consec_a; int consec_n, consec_flip, consec_valid;
     char frames[MAX_FRAMES][21]; uint32_t nframes;
@@ -478,8 +489,9 @@ int vc_load_firmware(vc_calc *c, const uint8_t *data, size_t len) {
         const char *base = c->family == VC_MODEL_16C ? "HP-16C CE firmware" : c->family == VC_MODEL_15C ? (loose && rm == 1 ? "HP-12C CE firmware" : loose && rm == 4 ? "HP-16C CE firmware" : "HP-15C CE firmware") :
                            c->family == VC_FAMILY_MULTI ? "HP-12C CE multi firmware (12C / 15C / 16C)" : "unknown firmware";
         int m16 = vc_firmware_mem16(c);
-        const char *e16 = m16 == VC_MEM16_LAYOUT206 ? " (16C: EAEA layout206, 206 slots)" : c->ext16 ? " (extended memory)" :
-                          m16 == VC_MEM16_EXT ? " (16C: extended memory)" : m16 == VC_MEM16_EXT_E3E3 ? " (16C: extended memory, early E3E3 layout)" :
+        const char *e16 = m16 == VC_MEM16_LAYOUT206 ? " (16C: extended memory, 206 slots)" :
+                          m16 == VC_MEM16_UNDETERMINED ? " (16C: extended memory, layout not confirmed)" :
+                          m16 == VC_MEM16_UNSUPPORTED ? " (16C: unsupported memory layout)" :
                           m16 == VC_MEM16_STD ? " (16C: standard memory)" : "";
         snprintf(c->info, sizeof c->info, "%s%s%s", base, e16, loose && c->family != VC_MODEL_NONE ? " (recognised by its structure, not a tested build)" : "");
     }
@@ -566,7 +578,10 @@ const char *vc_firmware_info(const vc_calc *c) { return c ? c->info : ""; }
 unsigned vc_capabilities(const vc_calc *c) {
     if (!c || c->family == VC_MODEL_NONE) return 0;
     if (c->family == VC_FAMILY_STOCK) return VC_CAP_KEYS_DISPLAY;
-    return VC_CAP_KEYS_DISPLAY | (c->profile && c->profile->mem16_layout == VC_MEM16_LEGACY_B3 ? 0 : VC_CAP_INSPECT) | VC_CAP_MEMORY | VC_CAP_MODEL_SWITCH;
+    /* 0.7.7: a 16C-only firmware with an unsupported pool has no inspector at all; on a multi-mode one the other
+     * modes keep it (vc_inspect refuses only its 16C mode). */
+    const int only16 = c->profile && c->profile->mem16_layout == VC_MEM16_UNSUPPORTED && c->profile->modes == VC_FW_16C;
+    return VC_CAP_KEYS_DISPLAY | (only16 ? 0 : VC_CAP_INSPECT) | VC_CAP_MEMORY | VC_CAP_MODEL_SWITCH;
 }
 int vc_engine(const vc_calc *c) { return c ? c->engine : -1; }
 const char *vc_last_error(const vc_calc *c) { return c ? c->err : "no calculator"; }
@@ -683,6 +698,17 @@ static int whole_isr(vc_calc *c, uint32_t fn) {
     return VC_OK;
 }
 
+/* Monotonic host time in microseconds (only for the 48 MHz host-time budget; never feeds emulated state). */
+static uint64_t host_us(void) {
+#ifdef _WIN32
+    LARGE_INTEGER f, t; QueryPerformanceFrequency(&f); QueryPerformanceCounter(&t);
+    return (uint64_t)(t.QuadPart / f.QuadPart) * 1000000u + (uint64_t)(t.QuadPart % f.QuadPart) * 1000000u / (uint64_t)f.QuadPart;
+#else
+    struct timespec ts; clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000u + (uint64_t)ts.tv_nsec / 1000u;
+#endif
+}
+
 int vc_run_ms(vc_calc *c, uint32_t ms) {
     if (!c || c->engine != VC_ENGINE_WHOLE) return VC_ERR_STATE;
     vc_cpu *cpu = &c->cpu;
@@ -690,6 +716,13 @@ int vc_run_ms(vc_calc *c, uint32_t ms) {
     for (i = 0; i < steps; i++) {
         uint64_t before = cpu->icount;
         int st = cpu_run(cpu, c->tick_insn, 0xFFFFFFFFu);
+        /* 0.7.7: at 48 MHz the instruction budget is not a ceiling: keep the CPU going (in budget-sized chunks)
+         * until it sleeps or the host-time budget of this slice is used. The tick below still runs once. */
+        if (st == CPU_RUN_COUNT && c->unthrottle48_us && rd32(c, c->clk_addr) == 48000000u) {
+            uint64_t t0 = host_us();
+            while (st == CPU_RUN_COUNT && host_us() - t0 < c->unthrottle48_us)
+                st = cpu_run(cpu, c->tick_insn, 0xFFFFFFFFu);
+        }
         if (st == CPU_RUN_FAULT) { snprintf(c->err, sizeof c->err, "%s", cpu->fault); return VC_ERR_FAULT; }
         /* PORT: the reference counts a sleep only for a 16-bit WFI in flash
          * (the reference looks at the halfword before PC, whatever ended the time slice) */
@@ -730,6 +763,11 @@ int vc_set_clock_ipc(vc_calc *c, double ipc) {
     return VC_OK;
 }
 double vc_clock_ipc(const vc_calc *c) { return c ? c->ipc : 0; }
+int vc_set_unthrottled_48mhz(vc_calc *c, uint32_t wall_us) {
+    if (!c || wall_us > 1000000u) return VC_ERR_ARG;
+    c->unthrottle48_us = wall_us; return VC_OK;
+}
+uint32_t vc_unthrottled_48mhz(const vc_calc *c) { return c ? c->unthrottle48_us : 0; }
 
 int vc_set_battery(vc_calc *c, double volts) {
     if (!c || volts < 0 || volts > 4) return VC_ERR_ARG;
@@ -989,42 +1027,46 @@ int vci_flash_u16(const vc_calc *c, uint32_t addr) {
     return c->img[addr - FLASH_BASE] | c->img[addr - FLASH_BASE + 1] << 8;
 }
 int vci_ext16(const vc_calc *c) { return c ? c->ext16 : 0; }
-/* The 16C memory layout of a 16C Nut ROM at flash address rb in a multi / 3-ROM image (see VC_MEM16_*).
- * The Path-C ROM (Nut word 0x1D4 = 0x15C) means extended memory. A multi tells E3E3 from E8E8 by the
- * eight register-address sites of the wrapper: E3E3 left them as `add.w rd, r2, rn, lsl #7` (first
- * halfword 0xEB02); E8E8 and later branch to caves that give the B7B7 offsets (flash 0x1318A is the first). */
+/* The 16C memory layout of a 16C Nut ROM at flash address rb (see VC_MEM16_*). 0.7.7: only stock and the
+ * 206-slot pool are supported. The Path-C ROM (Nut word 0x1D4 = 0x15C) means extended memory; the 206-slot
+ * pool has its floor constant 2F (instead of the stock E0). An extended ROM that does not show the 206
+ * floor is never guessed: it is VC_MEM16_UNDETERMINED and the app asks the user (stock or 206). */
 static int mem16_of_rom(const vc_calc *c, uint32_t rb) {
-    /* EAEA: all three independent floor constants are 2F, rather than 4D.
-     * Inspect the running Nut ROM, not a filename or an ambiguous RAM image. */
+    /* EAEA: all three independent floor constants are 2F. Inspect the running Nut ROM, not a filename. */
     if (vci_rom_word(c, rb, 0x10D9) == 0x2F &&
         vci_rom_word(c, rb, 0x1A1E) == 0x2F &&
         vci_rom_word(c, rb, 0x1A47) == 0x2F) return VC_MEM16_LAYOUT206;
     if (vci_rom_word(c, rb, 0x1D4) != 0x15C) return VC_MEM16_STD;
-    return vci_flash_u16(c, 0x1318A) == 0xEB02 ? VC_MEM16_EXT_E3E3 : VC_MEM16_EXT;
+    /* In the 3-ROM / Multi wrappers the 16C ROM is not one flat block: words 0x1A1E and 0x1A47 live in a
+     * bank stored elsewhere in flash. The low-bank floor constant at 0x10D9 is stored in place in every
+     * wrapper seen, so a wrapper ROM with the Path-C marker and floor 2F is the 206-slot pool (C9C9, ECEC). */
+    if (rb != A16_ROMBASE && vci_rom_word(c, rb, 0x10D9) == 0x2F) return VC_MEM16_LAYOUT206;
+    return VC_MEM16_UNDETERMINED;
+}
+/* 16C-only firmware (runner engine): extended memory is the 206-slot pool when the ROM says so; any other
+ * extended build is undetermined (never another layout). */
+static int mem16_of_16c(const vc_calc *c) {
+    int m = mem16_of_rom(c, A16_ROMBASE);
+    if (m == VC_MEM16_LAYOUT206) return m;
+    return c->ext16 || m == VC_MEM16_UNDETERMINED ? VC_MEM16_UNDETERMINED : VC_MEM16_STD;
 }
 int vc_set_mem16_layout(vc_calc *c, int layout) {
-    if (!c || (layout != VC_MEM16_NONE && layout != VC_MEM16_EXT && layout != VC_MEM16_LAYOUT206 && layout != VC_MEM16_STD && layout != VC_MEM16_EXT_E3E3 && layout != VC_MEM16_LEGACY_B3)) return VC_ERR_ARG;
+    if (!c || (layout != VC_MEM16_NONE && layout != VC_MEM16_LAYOUT206 && layout != VC_MEM16_STD)) return VC_ERR_ARG;
     c->mem16_override = layout; return VC_OK;
 }
 int vc_mem16_layout(const vc_calc *c) {
+    int m;
     if (!c || vc_model(c) != VC_MODEL_16C) return VC_MEM16_NONE;
-    if (c->mem16_override) return c->mem16_override;
-    if (c->profile) return c->profile->mem16_layout;
-    if (c->family == VC_MODEL_16C) {
-        if (mem16_of_rom(c, A16_ROMBASE) == VC_MEM16_LAYOUT206) return VC_MEM16_LAYOUT206;
-        return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
-    }
-    return mem16_of_rom(c, vci_rom_base(c));
+    m = c->profile ? c->profile->mem16_layout : c->family == VC_MODEL_16C ? mem16_of_16c(c) : mem16_of_rom(c, vci_rom_base(c));
+    if (m == VC_MEM16_UNSUPPORTED) return m;          /* no user choice makes an aliased / retired pool readable */
+    return c->mem16_override ? c->mem16_override : m;
 }
 /* Same, for the firmware file: the layout its 16C memory has, whatever model is active now. */
 int vc_firmware_mem16(const vc_calc *c) {
     uint32_t o;
     if (!c || !c->img || c->family == VC_MODEL_NONE || c->family == VC_FAMILY_STOCK) return VC_MEM16_NONE;
     if (c->profile) return c->profile->mem16_layout;
-    if (c->family == VC_MODEL_16C) {
-        if (mem16_of_rom(c, A16_ROMBASE) == VC_MEM16_LAYOUT206) return VC_MEM16_LAYOUT206;
-        return c->ext16 ? VC_MEM16_EXT : VC_MEM16_STD;
-    }
+    if (c->family == VC_MODEL_16C) return mem16_of_16c(c);
     for (o = 0; o + 12 <= c->img_len; o += 2) {
         const uint8_t *p = c->img + o;
         if (p[2] != 0x4E || p[3] != 0 || p[4] != 0x70 || p[5] != 2 || p[6] != 0x38 || p[7] != 2 || p[8] != 0xEE || p[9] != 2) continue;

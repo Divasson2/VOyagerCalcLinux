@@ -199,11 +199,12 @@ private slots:
     void memoryChecks() {
         QByteArray fw16 = vct::firmware16(), fw15 = vct::firmware15();
         if (fw16.isEmpty() || fw15.isEmpty()) QSKIP("needs the 15C and 16C firmware");
-        Machine m; m.loadFirmware(fw16); m.boot(nullptr); m.putMemory(vct::fixture("miller-rabin-ext-ready.16c"));
+        Machine m; m.loadFirmware(fw16); m.boot(nullptr); m.putMemory(vct::fixture("pi-1010-ready.16c"));
         QByteArray mem16 = m.memory();
         QVERIFY(Machine::checkMemory(mem16, fw16, 160).fits());
         QCOMPARE(Machine::checkMemory(QByteArray(100, 0), fw16, 160).kind, Machine::MemoryCheck::WrongSize);
-        QVERIFY(!Machine::checkMemory(QByteArray(2048, 0), fw16, 160).fits());
+        // an all-zero image has no valid Continuous Memory: the extended firmware rejects it (the stock 16C CE accepts it)
+        if (const QByteArray fw206 = vct::firmware206(); !fw206.isEmpty()) QVERIFY(!Machine::checkMemory(QByteArray(2048, 0), fw206, 160).fits());
         Machine m15; m15.loadFirmware(fw15); m15.boot(nullptr);
         QByteArray mem15 = m15.memory();
         QCOMPARE(Machine::checkMemory(mem15, fw16, 160).kind, Machine::MemoryCheck::Rejected);
@@ -223,7 +224,7 @@ private slots:
     void known16CFiles() {
         QByteArray fw16 = vct::firmware16(), fw15 = vct::firmware15();
         VC_REQUIRE(fw16, "16C");
-        for (const char *f : {"pi-1010-ready.16c", "fill-regs-jf-ws64-ready.16c", "e-2881-programE-ready.16c", "miller-rabin-ext-ready.16c"}) {
+        for (const char *f : {"pi-1010-ready.16c", "fill-regs-jf-ws64-ready.16c"}) {          // stock-layout files (0.7.7)
             QByteArray d = vct::fixture(f);
             QVERIFY2(Machine::checkMemory(d, fw16, 160).fits(), f);
             if (!fw15.isEmpty()) QVERIFY2(!Machine::checkMemory(d, fw15, 150).fits(), f);
