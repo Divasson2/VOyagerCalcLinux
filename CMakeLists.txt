@@ -58,8 +58,8 @@ foreach(f LcdPainter CalculatorWidget InspectorPanel BackWindow ProgramInfoDialo
   endif()
 endforeach()
 add_library(voyagerui STATIC ${UI_SOURCES})
-# 0.7.8 development builds say "0.7.8-dev" (About, --version); a release build sets -DVC_VERSION_SUFFIX= (empty).
-set(VC_VERSION_SUFFIX "-dev" CACHE STRING "Text after the version number (\"-dev\" for development builds, empty for a release)")
+# A development build can say e.g. "0.7.9-dev" (About, --version) with -DVC_VERSION_SUFFIX=-dev; releases leave it empty.
+set(VC_VERSION_SUFFIX "" CACHE STRING "Text after the version number (\"-dev\" for development builds, empty for a release)")
 target_compile_definitions(voyagerlogic PUBLIC VOYAGERCALC_VERSION="${PROJECT_VERSION}${VC_VERSION_SUFFIX}")
 target_link_libraries(voyagerui PUBLIC voyagerlogic Qt6::Widgets)
 

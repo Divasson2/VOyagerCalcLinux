@@ -13,7 +13,7 @@ over USB (`hidraw` on Linux, the standard Windows HID driver on Windows).
 * Licence: [MIT](LICENSE). Not affiliated with, endorsed by or sponsored by HP Inc.; "HP" and the calculator model names
   belong to their owners.
 
-> Status: version 0.7.7, a test release. HP-16C memory files use one of two layouts, detected automatically: stock (29 slots) or the 206-slot extended layout of EAEA, C9C9 and ECEC (R0–R720). At the firmware's 48 MHz speed setting a running program is no longer held to the 48 MHz instruction budget. Reading and writing the calculator's memory over USB works with a real calculator on both
+> Status: version 0.7.8, a test release. New in 0.7.8: program editing on the HP-15C and HP-16C (copy, cut, delete and paste program steps, paste program text and insert program files; see below). HP-16C memory files use one of two layouts, detected automatically: stock (29 slots) or the 206-slot extended layout of EAEA, C9C9 and ECEC (R0–R720). At the firmware's 48 MHz speed setting a running program is no longer held to the 48 MHz instruction budget. Reading and writing the calculator's memory over USB works with a real calculator on both
 > platforms in the author's tests: Linux, and Windows (tested on Windows 11 ARM with a real HP-15C). The Windows x64 build has been tested
 > under wine only, with a fake HID device. Reports from other systems and calculators are welcome.
 
@@ -46,7 +46,7 @@ Debian / Ubuntu: `sudo apt install build-essential cmake ninja-build qt6-base-de
   Build instructions (native or cross-compiled from Linux, x64 and arm64): [docs/BUILD-WINDOWS.md](docs/BUILD-WINDOWS.md);
   signing the release builds: [docs/SIGNING-WINDOWS.md](docs/SIGNING-WINDOWS.md).
 
-## Editing programs: copy, cut, paste (0.7.8-dev, HP-15C and HP-16C)
+## Editing programs: copy, cut, paste (0.7.8, HP-15C and HP-16C)
 
 In View ▸ Registers & Program, select program steps (Shift-click for a range). The Edit menu or right-click menu then has
 **Copy**, **Cut**, **Delete** and **Paste After Step**. Copy puts a text listing on the clipboard, one step per line with
