@@ -8,6 +8,8 @@ Apple Silicon Mac) and **x64** for Intel / AMD PCs (it also runs on Windows on A
 * **Zip** (`VoyagerCalc-<version>-windows-<arch>.zip`): *Extract All…*, open the folder, double-click `VoyagerCalc.exe`. Nothing is installed.
 
 The installer and the programs (`VoyagerCalc.exe` and `VoyagerCalc-cli.exe`) are Authenticode-signed by The Calculator Store SLNE, with a trusted timestamp.
+To check: right-click the file ▸ Properties ▸ Digital Signatures (signer The Calculator Store SLNE, with a timestamp); for VoyagerCalc 0.7.8,
+Details ▸ File version of `VoyagerCalc.exe` reads 0.7.8.
 
 ## First start
 Choose your **own** firmware file (File ▸ Choose Firmware…). No firmware is included (where to get it: "Where to get calculator firmware" in the [README](../README.md#where-to-get-calculator-firmware), which links The Calculator Store's firmware pages). It is remembered in
