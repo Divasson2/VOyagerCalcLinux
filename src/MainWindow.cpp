@@ -9,6 +9,8 @@
 #include "KeyClick.h"
 #include "MatrixEditor.h"
 #include "ProgramEntry15.h"
+#include "ProgramEntry.h"
+#include "PasteProgramDialog.h"
 #include "ProgramInfoDialog.h"
 #include "WelcomeWidget.h"
 #include "usb/UsbPlatform.h"
@@ -271,6 +273,10 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     prompts.confirmImport = [this](const QString &t, const QString &m) {
         return QMessageBox::question(this, t, m, QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Ok) == QMessageBox::Ok;
     };
+    prompts.confirmEdit = [this](const QString &t, const QString &m) {
+        return QMessageBox::question(this, t, m, QMessageBox::Ok | QMessageBox::Cancel, QMessageBox::Cancel) == QMessageBox::Ok;
+    };
+    prompts.pasteDialog = [](PasteProgramDialog &d) { return d.exec() == QDialog::Accepted; };
     prompts.error = [this](const QString &m) { QMessageBox::warning(this, QStringLiteral("VoyagerCalc"), m); };
     prompts.notice = [this](const QString &m) { QMessageBox::information(this, QStringLiteral("Note"), m); };
     prompts.openFile = [this](const QString &kind, const QString &filter) {
@@ -302,6 +308,11 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent) {
     connect(calc_, &CalculatorWidget::legendPressed, this, &MainWindow::pressLegend);
     connect(calc_, &CalculatorWidget::latchToggled, this, &MainWindow::toggleLatch);
     connect(inspector_, &InspectorPanel::editComment, this, &MainWindow::editComment);
+    connect(inspector_, &InspectorPanel::copyStepsRequested, this, [this](int a, int b, bool manz) { copyProgramSteps(a, b, manz); });
+    connect(inspector_, &InspectorPanel::cutStepsRequested, this, [this](int a, int b) { cutProgramSteps(a, b); });
+    connect(inspector_, &InspectorPanel::deleteStepsRequested, this, [this](int a, int b) { deleteProgramSteps(a, b); });
+    connect(inspector_, &InspectorPanel::pasteAfterRequested, this, [this](int at) { pasteProgram(at); });
+    connect(inspector_, &InspectorPanel::pasteTextRequested, this, [this](int at) { pasteProgramText(at); });
     connect(inspector_, &InspectorPanel::performKeys, this, [this](const QList<int> &k) { performKeys(std::vector<int>(k.begin(), k.end())); });
     calc_->router().press = [this](int c) { press(c); };
     calc_->router().release = [this](int c) { release(c); };
@@ -368,6 +379,25 @@ void MainWindow::buildMenus() {
     act(fileMenu_, QStringLiteral("Choose Firmware…"), [this] { chooseFirmware(); });
     fileMenu_->addSeparator();
     act(fileMenu_, QStringLiteral("Quit"), [this] { close(); }, QKeySequence::Quit);
+
+    // 0.7.8: program editing. The calculator itself uses no Ctrl keys, so these shortcuts are window-wide; text boxes keep their own.
+    QMenu *edit = menuBar()->addMenu(QStringLiteral("Edit"));
+    actUndoPrg_ = act(edit, QStringLiteral("Undo Program Edit"), [this] { undoProgramEdit(); }, QKeySequence::Undo);
+    actRedoPrg_ = act(edit, QStringLiteral("Redo Program Edit"), [this] { redoProgramEdit(); }, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_Z));
+    edit->addSeparator();
+    auto sel = [this] { return inspector_->selectedSteps(); };
+    actCutSteps_ = act(edit, QStringLiteral("Cut Steps"), [this, sel] { auto s = sel(); if (s.first) cutProgramSteps(s.first, s.second); }, QKeySequence::Cut);
+    actCopySteps_ = act(edit, QStringLiteral("Copy Steps"), [this, sel] { auto s = sel(); if (s.first) copyProgramSteps(s.first, s.second); }, QKeySequence::Copy);
+    actCopyManz_ = act(edit, QStringLiteral("Copy Steps as HP-15C Simulator Text"), [this, sel] { auto s = sel(); if (s.first) copyProgramSteps(s.first, s.second, true); });
+    actPasteSteps_ = act(edit, QStringLiteral("Paste After Step"), [this] { pasteProgram(inspector_->pasteTarget()); }, QKeySequence::Paste);
+    actDeleteSteps_ = act(edit, QStringLiteral("Delete Steps\tDel"), [this, sel] { auto s = sel(); if (s.first) deleteProgramSteps(s.first, s.second); });
+    edit->addSeparator();
+    actPasteText_ = act(edit, QStringLiteral("Paste Program Text…"), [this] { pasteProgramText(inspector_->pasteTarget()); }, QKeySequence(Qt::CTRL | Qt::SHIFT | Qt::Key_V));
+    actInsertFiles_ = act(edit, QStringLiteral("Insert Program File(s)…"), [this] { insertProgramFiles(inspector_->pasteTarget()); });
+    edit->addSeparator();
+    edit->addAction(QStringLiteral("Select steps in Registers && Program; Shift-click for a range"))->setEnabled(false);
+    for (QAction *a : {actCutSteps_, actCopySteps_, actPasteSteps_, actDeleteSteps_, actPasteText_, actInsertFiles_})
+        a->setToolTip(QStringLiteral("HP-15C and HP-16C: the steps are keyed in through the calculator, so it encodes them and takes the memory they need"));
 
     QMenu *view = menuBar()->addMenu(QStringLiteral("View"));
     actInspector_ = act(view, QStringLiteral("Registers && Program"), [this] { setShowInspector(!showInspector_); }, QKeySequence(Qt::CTRL | Qt::Key_I));
@@ -504,6 +534,21 @@ void MainWindow::updateMenus() {
         a->setToolTip(run && !isStock() && (snap_.model ? snap_.model : calc_->modelId()) != 15
                           ? QStringLiteral("HP-15C only")
                           : QStringLiteral("HP-15C programs in the format of Torsten Manz's HP-15C Simulator"));
+    }
+    {   // 0.7.8: program editing
+        const bool copy = run && hasInspector() && !switching_ && (currentModel() == 15 || currentModel() == 16);
+        const bool editable = canEditProgram();
+        const auto sel = inspector_->selectedSteps();
+        inspector_->setProgramEditing(copy, editable);
+        actCopySteps_->setEnabled(copy && sel.first);
+        actCopyManz_->setEnabled(copy && sel.first && currentModel() == 15);
+        actCopyManz_->setVisible(currentModel() == 15);
+        for (QAction *a : {actCutSteps_, actDeleteSteps_}) a->setEnabled(editable && sel.first);
+        for (QAction *a : {actPasteSteps_, actPasteText_, actInsertFiles_}) a->setEnabled(editable);
+        actUndoPrg_->setEnabled(editable && !undo_.empty());
+        actRedoPrg_->setEnabled(editable && !redo_.empty());
+        actUndoPrg_->setText(undo_.empty() ? QStringLiteral("Undo Program Edit") : QStringLiteral("Undo %1").arg(undo_.back().what));
+        actRedoPrg_->setText(redo_.empty() ? QStringLiteral("Redo Program Edit") : QStringLiteral("Redo %1").arg(redo_.back().what));
     }
     if (matrixEditor_ && matrixEditor_->property("vcAvailable").toBool() != is15) {
         matrixEditor_->setProperty("vcAvailable", is15);
@@ -842,6 +887,14 @@ void MainWindow::dropEvent(QDropEvent *e) {
     const QString ext = fi.suffix().toLower();
     e->acceptProposedAction();
     if (ext == QLatin1String("voyagerdoc")) { if (running_) openNotesFile(path); return; }
+    if (ext == QLatin1String("txt") || ext == QLatin1String("15c")) {           // 0.7.8: a program listing, checked in Paste Program Text
+        QStringList paths;
+        for (const QUrl &u : e->mimeData()->urls()) if (u.isLocalFile()) paths << u.toLocalFile();
+        if (canEditProgram()) insertProgramFiles(inspection_ ? inspection_->lines : 0, paths);
+        else if (ext == QLatin1String("15c") && running_) importManzFile(path);
+        else showError(QStringLiteral("Program listings can be inserted on the HP-15C and HP-16C (Edit ▸ Insert Program File(s)…)."));
+        return;
+    }
     if (fi.size() == Emulator::kMemorySize || MemoryFileNames::modelHint(ext) != 0) {
         if (running_) openMemoryFile(path); else showError(QStringLiteral("Choose the firmware file first (the .bin of about 112 KB), then open memory files."));
         return;
@@ -1133,6 +1186,7 @@ void MainWindow::memoryLoaded() {
     importedManz_.reset();
     memoryFileCandidate_.clear();
     lastProgramKeys_.clear();
+    forgetProgramEdits();
     if (pendingSidecar_) { doc_ = pendingSidecar_->first; notesPath_ = pendingSidecar_->second; storeNotes(); }
     else if (doc_.isEmpty() && !memoryFileName_.isEmpty()) { doc_.title = QFileInfo(memoryFileName_).completeBaseName(); storeNotes(); }
     pendingSidecar_.reset();
@@ -1156,6 +1210,7 @@ void MainWindow::clearAllNotes(bool forgetStored) {
     doc_ = ProgramDocument(); notesPath_.clear(); pendingSidecar_.reset(); memoryFileCandidate_.clear(); memoryFileName_.clear();
     importedManz_.reset();
     lastProgramKeys_.clear(); exportNames_.forgetAll();
+    forgetProgramEdits();
     if (forgetStored) NotesStore::forget(fw_.id);
     if (inspector_) inspector_->setComments({});
 }
@@ -1616,6 +1671,243 @@ void MainWindow::exportManzProgram() {
         const int n = int(p.steps.size());
         saveDataAs(QStringLiteral("manz15c"), base, QStringLiteral("HP-15C Simulator program (*.15c);;All files (*)"), p.fileData(), QStringLiteral("15c"),
                    [this, n](const QString &path) { showNotice(QStringLiteral("Exported %1 steps to “%2”.").arg(n).arg(QFileInfo(path).fileName())); });
+    });
+}
+
+// ---- 0.7.8: program editing (15C / 16C) ---------------------------------------------------------------------------------------------
+//
+// Copy writes our listing text (“# VoyagerCalc program · HP-15C”, then “nnn-keycodes  key names  ; comment”), which every paste
+// reads back. Cut, Delete and Paste build the whole new program and key it in through the firmware (enterProgram): the
+// calculator encodes the steps and takes the memory it needs; on any failure the memory is put back. Each edit keeps the
+// whole memory from before for Undo (20 levels). Nothing goes to a real calculator: Write to Calculator stays as it is.
+
+int MainWindow::editModel() const { return inspection_ ? inspection_->model : currentModel(); }
+
+bool MainWindow::canEditProgram() const {
+    const int m = currentModel();
+    return running_ && hasInspector() && hasMemoryFiles() && !switching_ && (m == 15 || m == 16) && !editingProgram_ && !importingProgram_ && !linkBusy();
+}
+
+void MainWindow::showComments() {
+    QMap<int, QString> m; for (auto &c : doc_.comments) if (!c.orphaned) m[c.step] = c.text;
+    inspector_->setComments(m);
+}
+
+std::vector<ProgStep> MainWindow::currentSteps(const InspectorSnapshot &s) const {
+    QMap<int, QString> comments;
+    for (auto &c : doc_.comments) if (!c.orphaned) comments[c.step] = c.text;
+    return stepsFromListing(s.model, s.hasProgram ? s.program : std::vector<ProgramLine>{}, comments);
+}
+
+void MainWindow::forgetProgramEdits() {
+    undo_.clear(); redo_.clear();
+    if (actUndoPrg_) updateMenus();
+}
+
+static QString stepRange(int first, int last) {
+    return first == last ? QStringLiteral("step %1").arg(first, 3, 10, QLatin1Char('0'))
+                         : QStringLiteral("steps %1–%2").arg(first, 3, 10, QLatin1Char('0')).arg(last, 3, 10, QLatin1Char('0'));
+}
+
+void MainWindow::copyProgramSteps(int first, int last, bool simulatorText) {
+    if (!running_ || !hasInspector()) return;
+    fetchProgram([this, first, last, simulatorText](std::shared_ptr<const InspectorSnapshot> s) {
+        if (!s || (s->model != 15 && s->model != 16)) return showError(QStringLiteral("Program steps can be copied on the HP-15C and HP-16C."));
+        const std::vector<ProgStep> all = currentSteps(*s);
+        const int a = std::max(1, first), b = std::min(last, int(all.size()));
+        if (a > b) return;
+        std::vector<ProgStep> part(all.begin() + (a - 1), all.begin() + b);
+        QString text;
+        if (simulatorText) text = programManzText(part, doc_.title);
+        else text = programFragmentText(s->model, part, a, doc_.title);
+        QApplication::clipboard()->setText(text);
+        inspector_->selectSteps(a, b);
+        updateMenus();
+    });
+}
+
+void MainWindow::cutProgramSteps(int first, int last) {
+    if (!canEditProgram()) return;
+    fetchProgram([this, first, last](std::shared_ptr<const InspectorSnapshot> s) {
+        if (!s || (s->model != 15 && s->model != 16)) return;
+        const std::vector<ProgStep> all = currentSteps(*s);
+        const int a = std::max(1, first), b = std::min(last, int(all.size()));
+        if (a > b) return;
+        std::vector<ProgStep> part(all.begin() + (a - 1), all.begin() + b);
+        QApplication::clipboard()->setText(programFragmentText(s->model, part, a, doc_.title));
+        applyProgramEdit(deleteSteps(all, a, b), QStringLiteral("Cut"), 0, 0,
+                         QStringLiteral("Cut %1 (%2 step%3) to the clipboard.").arg(stepRange(a, b)).arg(b - a + 1).arg(b > a ? "s" : ""));
+    });
+}
+
+void MainWindow::deleteProgramSteps(int first, int last) {
+    if (!canEditProgram()) return;
+    fetchProgram([this, first, last](std::shared_ptr<const InspectorSnapshot> s) {
+        if (!s || (s->model != 15 && s->model != 16)) return;
+        const std::vector<ProgStep> all = currentSteps(*s);
+        const int a = std::max(1, first), b = std::min(last, int(all.size()));
+        if (a > b) return;
+        applyProgramEdit(deleteSteps(all, a, b), QStringLiteral("Delete"), 0, 0, QString());
+    });
+}
+
+void MainWindow::pasteProgram(int after) {
+    if (!canEditProgram()) return;
+    const QString text = QApplication::clipboard()->text();
+    if (text.trimmed().isEmpty()) return pasteProgramText(after);
+    fetchProgram([this, after, text](std::shared_ptr<const InspectorSnapshot> s) {
+        if (!s || (s->model != 15 && s->model != 16)) return;
+        const std::vector<ProgStep> existing = currentSteps(*s);
+        const int at = std::clamp(after, 0, int(existing.size()));
+        const ProgramParse p = parseProgramText(text, s->model);
+        if (!p.ok() || p.steps.empty()) return pasteProgramText(at, text);     // let the dialog show what is wrong
+        const RenumberPlan plan = planRenumber(s->model, existing, p.steps, p.stepBlocks, false);
+        if (plan.anyLetterClash()) return pasteProgramText(at, text);          // ask about letter labels there
+        const std::vector<ProgStep> incoming = applyRenumber(s->model, p.steps, p.stepBlocks, plan);
+        const std::vector<ProgStep> program = insertSteps(existing, at, incoming);
+        const FitReport fit = checkFit(*s, program);
+        if (!fit.fits || !fit.lostRegisters.isEmpty()) return pasteProgramText(at, text);
+        QString notice;
+        if (plan.anyClash()) notice = QStringLiteral("Pasted %1 steps after step %2. Labels renumbered: %3.")
+                                          .arg(incoming.size()).arg(at, 3, 10, QLatin1Char('0')).arg(plan.describe().join(QStringLiteral("; ")));
+        const int n = int(incoming.size());
+        applyProgramEdit(program, QStringLiteral("Paste"), at + 1, at + n, notice);
+    });
+}
+
+void MainWindow::pasteProgramText(int after, const QString &text) {
+    if (!canEditProgram()) return;
+    fetchProgram([this, after, text](std::shared_ptr<const InspectorSnapshot> s) {
+        if (!s || (s->model != 15 && s->model != 16)) return;
+        const std::vector<ProgStep> existing = currentSteps(*s);
+        PasteProgramDialog dlg(s->model, existing, after, this);
+        dlg.fitCheck = [s](const std::vector<ProgStep> &program) { return checkFit(*s, program); };
+        dlg.setText(text);
+        if (!prompts.pasteDialog || !prompts.pasteDialog(dlg) || !dlg.canInsert()) return;
+        const std::vector<ProgStep> incoming = dlg.steps();
+        if (incoming.empty()) return;
+        const FitReport fit = dlg.fit();
+        if (!fit.lostRegisters.isEmpty() && prompts.confirmEdit
+            && !prompts.confirmEdit(QStringLiteral("Registers will be lost"), fit.message + QStringLiteral("\n\nInsert the steps anyway?")))
+            return;
+        QString notice;
+        if (dlg.plan().anyClash()) notice = QStringLiteral("Inserted %1 steps after step %2. %3").arg(incoming.size()).arg(dlg.after(), 3, 10, QLatin1Char('0'))
+                                                .arg(dlg.plan().describe().join(QStringLiteral("; ")));
+        applyProgramEdit(dlg.newProgram(), QStringLiteral("Paste"), dlg.after() + 1, dlg.after() + int(incoming.size()), notice);
+    });
+}
+
+void MainWindow::insertProgramFiles(int after, QStringList paths) {
+    if (!canEditProgram()) return;
+    if (paths.isEmpty()) {
+        QSettings st;
+        const QString dir = st.value(QStringLiteral("lastDir"), QDir::homePath()).toString();
+        // several files at once: Qt's own dialog (tests pass the paths directly)
+        paths = QFileDialog::getOpenFileNames(this, QStringLiteral("Insert Program Files"), dir,
+                                              QStringLiteral("Program listings (*.txt *.15c *.15C *.16c *.prg);;All files (*)"));
+        if (paths.isEmpty()) return;
+        st.setValue(QStringLiteral("lastDir"), QFileInfo(paths.first()).absolutePath());
+    }
+    QString text;
+    for (const QString &p : paths) {
+        QFile f(p);
+        if (!f.open(QIODevice::ReadOnly)) { showError(QStringLiteral("“%1” cannot be read: %2").arg(QFileInfo(p).fileName(), f.errorString())); return; }
+        if (!text.isEmpty() && !text.endsWith(QLatin1Char('\n'))) text += QLatin1Char('\n');
+        text += QStringLiteral("# file: %1\n").arg(QFileInfo(p).fileName()) + decodeProgramFile(f.readAll());
+    }
+    pasteProgramText(after, text);
+}
+
+void MainWindow::applyProgramEdit(const std::vector<ProgStep> &program, const QString &what, int selFirst, int selLast, const QString &notice) {
+    if (!canEditProgram() || !worker_) return;
+    editingProgram_ = true;
+    updateMenus();
+    setBusy(QStringLiteral("Keying in the program (%1 steps)…").arg(program.size()), 0);
+    struct Result { QByteArray before, after; std::shared_ptr<const InspectorSnapshot> snap; ProgramEntryReport report; };
+    auto r = std::make_shared<Result>();
+    auto prog = std::make_shared<std::vector<ProgStep>>(program);
+    const ProgramDocument docBefore = doc_;      // now: an inspector update can rematch doc_ before the job's answer arrives
+    worker_->submit(this, [r, prog](Machine &m) {
+        r->before = m.memory(true);
+        r->report = enterProgram(m, *prog);
+        r->after = m.memory(true);
+        if (auto s = inspect(m.calc, true)) r->snap = std::make_shared<const InspectorSnapshot>(*s);
+    }, [this, r, prog, what, selFirst, selLast, notice, docBefore](const QString &e) {
+        editingProgram_ = false;
+        setBusy(QString());
+        if (!e.isEmpty()) { updateMenus(); return showError(QStringLiteral("%1 did not work: %2").arg(what, e)); }
+        ProgramEdit u;
+        u.before = r->before; u.after = r->after; u.docBefore = docBefore; u.variant = snap_.variant; u.firmwareId = fw_.id; u.what = what;
+        // the step comments travel with their steps
+        if (r->snap) {
+            ProgramDocument d = docBefore;
+            std::vector<StepComment> kept;
+            for (auto &c : d.comments) if (c.orphaned) kept.push_back(c);
+            d.comments = kept;
+            for (size_t i = 0; i < prog->size(); ++i)
+                if (!(*prog)[i].comment.isEmpty()) d.setComment((*prog)[i].comment, int(i) + 1, r->snap->program);
+            doc_ = d;
+            lastProgramKeys_.clear();
+            for (auto &l : r->snap->program) lastProgramKeys_.push_back(l.keys);
+        }
+        u.docAfter = doc_;
+        undo_.push_back(u);
+        while (int(undo_.size()) > kProgramUndoLevels) undo_.pop_front();
+        redo_.clear();
+        storeNotes();
+        showComments();
+        saveStateNow(true);
+        if (selFirst > 0) inspector_->selectSteps(selFirst, selLast); else inspector_->selectSteps(0, 0);
+        updateMenus();
+        if (!r->report.mismatches.empty()) {
+            QStringList list;
+            for (size_t i = 0; i < r->report.mismatches.size() && i < 5; ++i) {
+                auto &mm = r->report.mismatches[i];
+                list << QStringLiteral("%1 {%2} → {%3}").arg(mm.step, 3, 10, QLatin1Char('0')).arg(mm.file, mm.calculator);
+            }
+            showError(QStringLiteral("The program was keyed in, but some steps differ: %1. Undo puts the program back.").arg(list.join(QStringLiteral("; "))));
+        } else if (!notice.isEmpty()) showNotice(notice);
+    });
+}
+
+void MainWindow::undoProgramEdit() { restoreProgramEdit(true); }
+void MainWindow::redoProgramEdit() { restoreProgramEdit(false); }
+
+void MainWindow::restoreProgramEdit(bool undo) {
+    auto &from = undo ? undo_ : redo_;
+    if (from.empty() || !canEditProgram() || !worker_) return;
+    const ProgramEdit e = from.back();
+    if (e.variant != snap_.variant || e.firmwareId != QString(fw_.id)) {
+        forgetProgramEdits();
+        return showError(QStringLiteral("The model or firmware changed since the edit, so it cannot be undone."));
+    }
+    // the memory now: is it still the one right after the edit (undo) / before it (redo)?
+    QByteArray now;
+    worker_->performAndWait([&](Machine &m) { now = m.memory(true); });
+    const QByteArray expected = undo ? e.after : e.before;
+    if (now != expected && prompts.confirmEdit
+        && !prompts.confirmEdit(undo ? QStringLiteral("Undo %1?").arg(e.what) : QStringLiteral("Redo %1?").arg(e.what),
+                                QStringLiteral("The calculator's memory changed after this edit (registers, settings or the program). %1 puts back the whole "
+                                               "memory as it was %2 the edit, so those later changes are lost.").arg(undo ? QStringLiteral("Undo") : QStringLiteral("Redo"),
+                                                                                                                      undo ? QStringLiteral("before") : QStringLiteral("after"))))
+        return;
+    const QByteArray target = undo ? e.before : e.after;
+    from.pop_back();
+    editingProgram_ = true;
+    updateMenus();
+    worker_->submit(this, [target](Machine &m) { m.putMemory(target); }, [this, e, undo](const QString &err) {
+        editingProgram_ = false;
+        if (!err.isEmpty()) { updateMenus(); return showError(err); }
+        auto &to = undo ? redo_ : undo_;
+        to.push_back(e);
+        while (int(to.size()) > kProgramUndoLevels) to.pop_front();
+        doc_ = undo ? e.docBefore : e.docAfter;
+        lastProgramKeys_.clear();
+        storeNotes();
+        showComments();
+        inspector_->selectSteps(0, 0);
+        saveStateNow(true);
+        updateMenus();
     });
 }
 

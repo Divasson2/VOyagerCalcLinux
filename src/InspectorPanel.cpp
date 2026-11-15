@@ -2,6 +2,9 @@
 // Copyright (c) 2026 José González Divassón
 #include "InspectorPanel.h"
 #include "CalcActions.h"
+#include <QItemSelectionModel>
+#include <QShortcut>
+#include <QStyle>
 #include <QAbstractListModel>
 #include <QApplication>
 #include <QButtonGroup>
@@ -141,7 +144,10 @@ public:
         if (role == Qt::ToolTipRole) return r.help;
         return {};
     }
-    Qt::ItemFlags flags(const QModelIndex &) const override { return Qt::ItemIsEnabled | Qt::ItemIsSelectable; }
+    Qt::ItemFlags flags(const QModelIndex &i) const override {
+        if (i.isValid() && i.row() < int(rows.size()) && rows[size_t(i.row())].kind == RowKind::Prog && rows[size_t(i.row())].step > 0) return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+        return i.isValid() && i.row() < int(rows.size()) && rows[size_t(i.row())].kind == RowKind::Prog ? Qt::ItemIsEnabled : Qt::ItemIsEnabled | Qt::ItemIsSelectable;
+    }
     void setRows(std::vector<Row> n) {
         const qint64 now = QDateTime::currentMSecsSinceEpoch();
         bool sameShape = n.size() == rows.size();
@@ -259,6 +265,7 @@ public:
         }
         case RowKind::Prog: {
             if (r.current) p->fillRect(rc, pointerBand(r.running));
+            if (opt.state & QStyle::State_Selected) { QColor h = pal.color(QPalette::Highlight); h.setAlphaF(0.38); p->fillRect(rc, h); }
             QFont f = mono; if (r.current) f.setWeight(QFont::DemiBold); p->setFont(f);
             QColor numc = r.current ? text : dim;
             p->setPen(numc);
@@ -414,6 +421,7 @@ InspectorPanel::InspectorPanel(QWidget *parent) : QWidget(parent) {
         return v;
     };
     regView_ = makeView(regModel_); progView_ = makeView(progModel_);
+    progView_->setSelectionMode(QAbstractItemView::ExtendedSelection);      // 0.7.8: step ranges for copy / paste
     col->addWidget(regView_, 1); col->addWidget(progView_, 1);
     outer->addWidget(content_, 1);
 
@@ -462,17 +470,53 @@ InspectorPanel::InspectorPanel(QWidget *parent) : QWidget(parent) {
         QModelIndex i = progView_->indexAt(pt);
         if (!i.isValid()) return;
         const Row &r = progModel_->rows[i.row()];
-        if (r.kind != RowKind::Prog || r.step <= 0) return;
+        if (r.kind != RowKind::Prog || r.step < 0) return;
         QMenu m; int step = r.step;
-        if (snap_) {
+        if (snap_ && step > 0) {
             CalcAction g = CalcActions::gto(*snap_, step);
             QList<int> keys(g.keys.begin(), g.keys.end());
             m.addAction(g.title, this, [this, keys] { emit performKeys(keys); })->setEnabled(g.enabled);
             m.addSeparator();
         }
-        m.addAction(r.comment.isEmpty() ? QStringLiteral("Add Comment…") : QStringLiteral("Edit Comment…"), [this, step] { emit editComment(step); });
+        if (canCopy_) {
+            auto sel = selectedSteps();
+            if (step > 0 && (sel.first == 0 || step < sel.first || step > sel.second)) { selectSteps(step, step); sel = {step, step}; }
+            const QString range = sel.first == sel.second ? QStringLiteral("Step %1").arg(sel.first, 3, 10, QLatin1Char('0'))
+                                                          : QStringLiteral("Steps %1–%2").arg(sel.first, 3, 10, QLatin1Char('0')).arg(sel.second, 3, 10, QLatin1Char('0'));
+            if (sel.first > 0) {
+                m.addAction(QStringLiteral("Copy %1").arg(range), this, [this, sel] { emit copyStepsRequested(sel.first, sel.second, false); });
+                if (snap_ && snap_->model == 15) m.addAction(QStringLiteral("Copy %1 as HP-15C Simulator Text").arg(range), this, [this, sel] { emit copyStepsRequested(sel.first, sel.second, true); });
+                m.addAction(QStringLiteral("Cut %1").arg(range), this, [this, sel] { emit cutStepsRequested(sel.first, sel.second); })->setEnabled(canEdit_);
+                m.addAction(QStringLiteral("Delete %1").arg(range), this, [this, sel] { emit deleteStepsRequested(sel.first, sel.second); })->setEnabled(canEdit_);
+                m.addSeparator();
+            }
+            const int at = sel.first > 0 ? sel.second : step;
+            const QString where = at == 0 ? QStringLiteral("at the Top") : QStringLiteral("After Step %1").arg(at, 3, 10, QLatin1Char('0'));
+            m.addAction(QStringLiteral("Paste %1").arg(where), this, [this, at] { emit pasteAfterRequested(at); })->setEnabled(canEdit_);
+            m.addAction(QStringLiteral("Paste Program Text…"), this, [this, at] { emit pasteTextRequested(at); })->setEnabled(canEdit_);
+            m.addSeparator();
+        }
+        if (step > 0) m.addAction(r.comment.isEmpty() ? QStringLiteral("Add Comment…") : QStringLiteral("Edit Comment…"), [this, step] { emit editComment(step); });
         m.exec(progView_->viewport()->mapToGlobal(pt));
     });
+    // keep the selection one contiguous range of steps
+    connect(progView_->selectionModel(), &QItemSelectionModel::selectionChanged, this, [this] {
+        if (fixingSelection_) return;
+        auto sel = selectedSteps();
+        if (sel.first == 0) return;
+        int count = 0;
+        for (const QModelIndex &i : progView_->selectionModel()->selectedIndexes()) if (progModel_->rows[size_t(i.row())].step > 0) ++count;
+        if (count != sel.second - sel.first + 1) selectSteps(sel.first, sel.second);
+    });
+    auto shortcut = [this](const QKeySequence &k, std::function<void()> fn) {
+        auto *sc = new QShortcut(k, progView_);
+        sc->setContext(Qt::WidgetWithChildrenShortcut);
+        connect(sc, &QShortcut::activated, this, fn);
+    };
+    // Copy / Cut / Paste / Undo are the Edit menu's shortcuts (window-wide; the calculator uses no Ctrl keys). Delete and
+    // Backspace only here, where they cannot reach the calculator's back-arrow key.
+    shortcut(QKeySequence(Qt::Key_Delete), [this] { auto s = selectedSteps(); if (canEdit_ && s.first) emit deleteStepsRequested(s.first, s.second); });
+    shortcut(QKeySequence(Qt::Key_Backspace), [this] { auto s = selectedSteps(); if (canEdit_ && s.first) emit deleteStepsRequested(s.first, s.second); });
     auto *flash = new QTimer(this);
     flash->setInterval(60);
     connect(flash, &QTimer::timeout, this, [this] { if (regModel_->flashing()) regView_->viewport()->update(); });
@@ -504,6 +548,36 @@ bool InspectorPanel::triggerProgramItem(int step, const QString &title) {
     CalcAction g = CalcActions::gto(*snap_, step);
     if (g.title != title || !g.enabled) return false;
     emit performKeys(QList<int>(g.keys.begin(), g.keys.end())); return true;
+}
+
+std::pair<int, int> InspectorPanel::selectedSteps() const {
+    int lo = 0, hi = 0;
+    for (const QModelIndex &i : progView_->selectionModel()->selectedIndexes()) {
+        if (i.row() >= int(progModel_->rows.size())) continue;
+        const Row &r = progModel_->rows[size_t(i.row())];
+        if (r.kind != RowKind::Prog || r.step <= 0) continue;
+        if (!lo || r.step < lo) lo = r.step;
+        if (r.step > hi) hi = r.step;
+    }
+    return {lo, hi};
+}
+
+void InspectorPanel::selectSteps(int first, int last) {
+    fixingSelection_ = true;
+    QItemSelection sel;
+    for (int row = 0; row < int(progModel_->rows.size()); ++row) {
+        const Row &r = progModel_->rows[size_t(row)];
+        if (r.kind == RowKind::Prog && r.step > 0 && r.step >= first && r.step <= last) sel.select(progModel_->index(row), progModel_->index(row));
+    }
+    progView_->selectionModel()->select(sel, QItemSelectionModel::ClearAndSelect);
+    if (!sel.isEmpty()) progView_->scrollTo(sel.indexes().first());
+    fixingSelection_ = false;
+}
+
+int InspectorPanel::pasteTarget() const {
+    auto s = selectedSteps();
+    if (s.first) return s.second;
+    return snap_ ? snap_->line : 0;
 }
 
 void InspectorPanel::setEmptyText(const QString &t) { empty_->setText(t); }

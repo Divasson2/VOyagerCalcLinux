@@ -5,6 +5,8 @@
 // Pool15Views.swift): model / mode / flag header, a Both / Registers / Program switch, the stack (imaginary part
 // in complex mode), the HP-15C memory pool bar with its g MEM line, matrices A-E, storage registers with a
 // "Non-zero only" toggle, and the program with the pointer line, step comments (double-click to edit).
+// 0.7.8: program steps can be selected (Shift-click for a range) and copied, cut, deleted and pasted (Edit menu,
+// context menu, Ctrl+C / Ctrl+X / Ctrl+V / Delete while the listing has the focus).
 #pragma once
 #include "Inspector.h"
 #include <QMap>
@@ -57,11 +59,24 @@ public:
     /// Trigger a context-menu item by title as if chosen (tests); false when it is not there or disabled.
     bool triggerRegisterItem(const QString &name, const QString &title);
     bool triggerProgramItem(int step, const QString &title);
+    /// 0.7.8: program steps selected in the listing (always one contiguous range), {0, 0} when none.
+    std::pair<int, int> selectedSteps() const;
+    void selectSteps(int first, int last);           // 0, 0 clears
+    /// Copy works on the 15C / 16C; Cut, Delete and Paste only when the program can be changed (set by the window).
+    void setProgramEditing(bool canCopy, bool canEdit) { canCopy_ = canCopy; canEdit_ = canEdit; }
+    /// Where Paste puts the steps: after the last selected step, else after the current program line.
+    int pasteTarget() const;
 
 signals:
     void editComment(int step);
     /// A context-menu item (GTO nnn, RCL / STO / x≷ …): the keys to press on the calculator.
     void performKeys(const QList<int> &keys);
+    // 0.7.8: program editing (the window does the work)
+    void copyStepsRequested(int first, int last, bool simulatorText);
+    void cutStepsRequested(int first, int last);
+    void deleteStepsRequested(int first, int last);
+    void pasteAfterRequested(int step);
+    void pasteTextRequested(int step);
 
 private:
     void rebuild();
@@ -77,6 +92,7 @@ private:
     RowModel *regModel_, *progModel_;
     QCheckBox *zeros_;
     QButtonGroup *paneButtons_;
+    bool canCopy_ = false, canEdit_ = false, fixingSelection_ = false;
 };
 
 }  // namespace vc

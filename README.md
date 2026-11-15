@@ -46,6 +46,31 @@ Debian / Ubuntu: `sudo apt install build-essential cmake ninja-build qt6-base-de
   Build instructions (native or cross-compiled from Linux, x64 and arm64): [docs/BUILD-WINDOWS.md](docs/BUILD-WINDOWS.md);
   signing the release builds: [docs/SIGNING-WINDOWS.md](docs/SIGNING-WINDOWS.md).
 
+## Editing programs: copy, cut, paste (0.7.8-dev, HP-15C and HP-16C)
+
+In View ▸ Registers & Program, select program steps (Shift-click for a range). The Edit menu or right-click menu then has
+**Copy**, **Cut**, **Delete** and **Paste After Step**. Copy puts a text listing on the clipboard, one step per line with
+keycodes, key names and `; comment`. **Paste Program Text…** (Ctrl+Shift+V) and **Insert Program File(s)…** read:
+
+* our copied steps
+* *Export Listing as Text*
+* HP-15C Simulator `.15c` files
+* listings with step numbers and keycodes (`001-42,21,11`, `12 { 43 22 A }`)
+* listings with key names only (`LBL A`, `STO 1`, `x<>y`, `SL`)
+
+Every line is checked before anything is keyed in. A line in error is named with its line number. A key name that fits more
+than one step offers a list of choices. Several files can be added one after another to build a library:
+
+* a clashing digit label (`LBL 1`) is renumbered automatically, along with its `GTO` / `GSB`
+* a clashing letter label is renumbered only when you tick the box
+* the memory check refuses a program that does not fit
+* on the HP-16C, the memory check warns about storage registers that a longer program would take
+
+The new program is keyed in through the calculator's own firmware (program mode, CLEAR PRGM, every step). The calculator
+therefore encodes the steps and takes the memory they need. If anything goes wrong, the memory from before is put back. Edit
+▸ Undo / Redo Program Edit (Ctrl+Z / Ctrl+Shift+Z) keeps 20 levels. Nothing is written to a real calculator: *Write to
+Calculator* stays a separate, confirmed step. The memory file format is unchanged.
+
 ## Converting old HP-16C memory files
 
 16C memory files saved on the retired 176-slot extended builds (B4B4–B7B7, E3E3, E8E8, E9E9) no longer open in 0.7.7. `tools/convert_16c_memory.py` (Python 3.8+, standard library only; also in the `tools` folder of the Linux and Windows packages) converts them to the 206-slot layout of EAEA, C9C9 and ECEC, and converts a stock file with `--from stock`:

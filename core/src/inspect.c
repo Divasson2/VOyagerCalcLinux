@@ -345,6 +345,20 @@ static void fill(vc_prog_line *p, int line, const vc_op *op, const uint8_t *code
     snprintf(p->mnemonic, sizeof p->mnemonic, "%s", op->mn);
 }
 
+int vc_decode_step(int model, const uint8_t *code, int len, vc_prog_line *out) {
+    if (!code || !out || len < 1) return VC_ERR_ARG;
+    if (model == 16) { fill(out, 0, &OP16[code[0]], code, 1); return 1; }
+    if (model == 12) { fill(out, 0, &OP12[code[0]], code, 1); return 1; }
+    if (model == 15) {
+        if (OP15_LEN[code[0]] == 2 && OP15X[code[0]]) {
+            if (len < 2) return 0;
+            fill(out, 0, &OP15X[code[0]][code[1]], code, 2); return 2;
+        }
+        fill(out, 0, &OP15[code[0]], code, 1); return 1;
+    }
+    return VC_ERR_ARG;
+}
+
 int vc_inspect_program(vc_calc *c, int first, vc_prog_line *out, int max) {
     layout L; int r, n = 0;
     if (!c || (!out && max > 0) || first < 1 || max < 0) return VC_ERR_ARG;

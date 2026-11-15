@@ -4,7 +4,7 @@
 # VoyagerCalc for Linux: Qt 6 front end around the C emulator core in core/.
 # Build:  cmake -S . -B build -G Ninja [-DCMAKE_PREFIX_PATH=/path/to/Qt/6.x/gcc_64] && cmake --build build
 cmake_minimum_required(VERSION 3.21)
-project(VoyagerCalc VERSION 0.7.7 LANGUAGES C CXX)
+project(VoyagerCalc VERSION 0.7.8 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -31,7 +31,7 @@ endif()
 # --- the logic: engine, machine, inspector, analysis, documents, PDF, USB link (QtCore + QtGui, no widgets) --------
 set(LOGIC_SOURCES
   src/Emulator.cpp src/Machine.cpp src/Inspector.cpp src/Model.cpp src/ProgramAnalysis.cpp src/ProgramDocument.cpp
-  src/Stores.cpp src/EngineWorker.cpp src/KeyGlyphs.cpp src/PdfExport.cpp src/KeyClick.cpp src/Matrix15.cpp src/Manz15C.cpp src/ProgramEntry15.cpp src/CalcActions.cpp
+  src/Stores.cpp src/EngineWorker.cpp src/KeyGlyphs.cpp src/PdfExport.cpp src/KeyClick.cpp src/Matrix15.cpp src/Manz15C.cpp src/ProgramEntry15.cpp src/ProgramText.cpp src/ProgramEntry.cpp src/CalcActions.cpp
   src/usb/CalculatorLink.cpp src/usb/UsbLog.cpp src/usb/StepGuard.cpp src/usb/UsbPlatform.cpp
   src/usb/PortTransport.cpp src/usb/UsbSelfTestPort.cpp)
 # the USB transport of each operating system: Linux = /dev/hidrawN + udev rule; Windows = SetupAPI + hid.dll (no driver, no setup)
@@ -52,13 +52,15 @@ endif()
 
 # --- the widgets -----------------------------------------------------------------------------------------------
 set(UI_SOURCES "")
-foreach(f LcdPainter CalculatorWidget InspectorPanel BackWindow ProgramInfoDialog WelcomeWidget MatrixEditor MainWindow)
+foreach(f LcdPainter CalculatorWidget InspectorPanel BackWindow ProgramInfoDialog WelcomeWidget MatrixEditor PasteProgramDialog MainWindow)
   if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/src/${f}.cpp")
     list(APPEND UI_SOURCES src/${f}.cpp)
   endif()
 endforeach()
 add_library(voyagerui STATIC ${UI_SOURCES})
-target_compile_definitions(voyagerlogic PUBLIC VOYAGERCALC_VERSION="${PROJECT_VERSION}")
+# 0.7.8 development builds say "0.7.8-dev" (About, --version); a release build sets -DVC_VERSION_SUFFIX= (empty).
+set(VC_VERSION_SUFFIX "-dev" CACHE STRING "Text after the version number (\"-dev\" for development builds, empty for a release)")
+target_compile_definitions(voyagerlogic PUBLIC VOYAGERCALC_VERSION="${PROJECT_VERSION}${VC_VERSION_SUFFIX}")
 target_link_libraries(voyagerui PUBLIC voyagerlogic Qt6::Widgets)
 
 if(WIN32)
@@ -105,7 +107,7 @@ function(vc_test name)
     set_target_properties(tst_${name} PROPERTIES WIN32_EXECUTABLE OFF)
   endif()
 endfunction()
-set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app selftest speed matrix manz calcactions layout pool206)
+set(VC_TESTS facemodel emulator widget models machine inspector analysis document link portusb pdf app selftest speed matrix manz calcactions layout pool206 programtext programedit programui)
 add_executable(test_layout206 core/tests/test_layout206.c)
 target_link_libraries(test_layout206 PRIVATE voyagercore)
 add_test(NAME layout206 COMMAND test_layout206)

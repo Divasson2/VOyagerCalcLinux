@@ -13,6 +13,8 @@
 #include "MatrixEditor.h"
 #include "BackWindow.h"
 #include "Manz15C.h"
+#include "ProgramText.h"
+#include <deque>
 #include "usb/CalculatorLink.h"
 #include "usb/HidTransport.h"
 #include <QMainWindow>
@@ -36,6 +38,7 @@ namespace vc {
 
 class CalculatorWidget;
 class InspectorPanel;
+class PasteProgramDialog;
 
 class WelcomeWidget;
 
@@ -77,6 +80,8 @@ public:
         std::function<QString(const QString &suggestedName, const QString &filter)> saveFile;
         std::function<bool(const QString &)> askFixPermissions;       // offered with the "no access" message
         std::function<void(MatrixEditor::Hooks &)> matrixHooks;
+        std::function<bool(PasteProgramDialog &)> pasteDialog;                              // 0.7.8 tests: fill in the Paste Program Text dialog; true = Insert
+        std::function<bool(const QString &title, const QString &message)> confirmEdit;     // 0.7.8: registers lost, undo over later changes: true = go on
         std::function<bool(const QString &title, const QString &message)> confirmImport;   // File ▸ Import Program (.15c)…: true = import       // tests: replace the clipboard / paste preview of the Matrix Editor
     };
     Prompts prompts;
@@ -190,6 +195,22 @@ public:
     void setPaper(Paper p);
     void editComment(int step);
 
+    // 0.7.8: program editing on the HP-15C and HP-16C (stock and 206). Every change builds the whole new program and keys it
+    // in through the firmware (ProgramEntry.h); a failure leaves the memory as it was. 20 levels of Undo / Redo.
+    bool canEditProgram() const;
+    bool isEditingProgram() const { return editingProgram_; }
+    void copyProgramSteps(int first, int last, bool simulatorText = false);
+    void cutProgramSteps(int first, int last);
+    void deleteProgramSteps(int first, int last);
+    void pasteProgram(int after);                     // the clipboard: straight in when it reads cleanly, else the dialog
+    void pasteProgramText(int after, const QString &text = QString());   // Edit ▸ Paste Program Text…
+    void insertProgramFiles(int after, QStringList paths = {});         // Edit ▸ Insert Program File(s)…
+    void undoProgramEdit();
+    void redoProgramEdit();
+    int programUndoDepth() const { return int(undo_.size()); }
+    int programRedoDepth() const { return int(redo_.size()); }
+    static constexpr int kProgramUndoLevels = 20;
+
 protected:
     void closeEvent(QCloseEvent *) override;
     void dragEnterEvent(QDragEnterEvent *) override;
@@ -295,6 +316,24 @@ private:
     QLabel *importLabel_ = nullptr;
     QPushButton *undoLoad_ = nullptr;
     void refreshImportStatus();
+
+    // 0.7.8: program editing
+    struct ProgramEdit {
+        QByteArray before, after;    // the whole memory before and right after the edit
+        ProgramDocument docBefore, docAfter;
+        int variant = 0;
+        QString firmwareId, what;
+    };
+    std::deque<ProgramEdit> undo_, redo_;
+    bool editingProgram_ = false;
+    QAction *actUndoPrg_ = nullptr, *actRedoPrg_ = nullptr, *actCopySteps_ = nullptr, *actCopyManz_ = nullptr, *actCutSteps_ = nullptr,
+            *actPasteSteps_ = nullptr, *actDeleteSteps_ = nullptr, *actPasteText_ = nullptr, *actInsertFiles_ = nullptr;
+    void applyProgramEdit(const std::vector<ProgStep> &program, const QString &what, int selFirst, int selLast, const QString &notice);
+    void restoreProgramEdit(bool undo);
+    void forgetProgramEdits();
+    void showComments();
+    std::vector<ProgStep> currentSteps(const InspectorSnapshot &s) const;
+    int editModel() const;
 
     // usb
     QString linkStatus_;

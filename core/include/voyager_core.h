@@ -297,6 +297,10 @@ typedef struct vc_prog_line {
 } vc_prog_line;
 /* Up to max lines starting at line first (1-based). Returns the number filled, or an error. */
 int vc_inspect_program(vc_calc *c, int first, vc_prog_line *out, int max);
+/* 0.7.8: decode one program step from its byte(s) without a calculator (model 12, 15 or 16), with the same
+ * tables as vc_inspect_program (out->line is 0). Returns the bytes used (1, or 2 for a 15C two-byte step),
+ * 0 when code[0] starts a 15C two-byte step and len < 2, or VC_ERR_ARG. Read-only, no memory format involved. */
+int vc_decode_step(int model, const uint8_t *code, int len, vc_prog_line *out);
 
 
 /* --- 16C memory layouts (what a .16c / .bin16c image contains) ------------------------------
